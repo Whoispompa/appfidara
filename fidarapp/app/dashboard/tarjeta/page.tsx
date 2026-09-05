@@ -1,0 +1,829 @@
+"use client";
+
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+import {
+  Check,
+  Gift,
+  ImageIcon,
+  LoaderCircle,
+  Palette,
+  Repeat2,
+  Save,
+  Stamp,
+  Upload,
+} from "lucide-react";
+
+import { QRCodeSVG } from "qrcode.react";
+
+type RewardInformation = {
+  id: string;
+  name: string;
+  description?: string | null;
+  requiredValue: number;
+};
+
+type ProgramInformation = {
+  id: string;
+  name: string;
+  description?: string | null;
+  programType: number;
+  targetValue: number;
+  isRecurring: boolean;
+  cardLogoUrl?: string | null;
+  activeStampImageUrl?: string | null;
+  inactiveStampImageUrl?: string | null;
+  cardBackgroundColor?: string | null;
+  cardForegroundColor?: string | null;
+  cardLabelColor?: string | null;
+  showPoweredByFidara: boolean;
+  reward: RewardInformation;
+};
+
+type ProgramForm = {
+  name: string;
+  description: string;
+  targetValue: number;
+  isRecurring: boolean;
+  cardBackgroundColor: string;
+  cardForegroundColor: string;
+  cardLabelColor: string;
+  showPoweredByFidara: boolean;
+  rewardName: string;
+  rewardDescription: string;
+};
+
+type ImageFiles = {
+  logo: File | null;
+  activeStamp: File | null;
+  inactiveStamp: File | null;
+};
+
+type ImagePreviews = {
+  logo: string | null;
+  activeStamp: string | null;
+  inactiveStamp: string | null;
+};
+
+const apiUrl =
+  process.env.NEXT_PUBLIC_FIDARA_API_URL ?? "https://api.fidara.mx";
+
+function absoluteUrl(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("blob:")
+  ) {
+    return value;
+  }
+
+  return `${apiUrl}${value}`;
+}
+
+const initialForm: ProgramForm = {
+  name: "",
+  description: "",
+  targetValue: 10,
+  isRecurring: true,
+  cardBackgroundColor: "#1b6726",
+  cardForegroundColor: "#ffffff",
+  cardLabelColor: "#f5f1e8",
+  showPoweredByFidara: true,
+  rewardName: "",
+  rewardDescription: "",
+};
+
+export default function CardEditorPage() {
+  const router = useRouter();
+
+  const [program, setProgram] = useState<ProgramInformation | null>(null);
+
+  const [form, setForm] = useState<ProgramForm>(initialForm);
+
+  const [files, setFiles] = useState<ImageFiles>({
+    logo: null,
+    activeStamp: null,
+    inactiveStamp: null,
+  });
+
+  const [previews, setPreviews] = useState<ImagePreviews>({
+    logo: null,
+    activeStamp: null,
+    inactiveStamp: null,
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  const [saving, setSaving] = useState(false);
+
+  const [error, setError] = useState("");
+
+  const [success, setSuccess] = useState("");
+
+  const loadProgram = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/programs/current", {
+        cache: "no-store",
+      });
+
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload.message ?? "No fue posible cargar el programa.",
+        );
+      }
+
+      const data: ProgramInformation = payload.data;
+
+      setProgram(data);
+
+      setForm({
+        name: data.name,
+        description: data.description ?? "",
+
+        targetValue: Number(data.targetValue),
+
+        isRecurring: data.isRecurring,
+
+        cardBackgroundColor: data.cardBackgroundColor ?? "#1b6726",
+
+        cardForegroundColor: data.cardForegroundColor ?? "#ffffff",
+
+        cardLabelColor: data.cardLabelColor ?? "#f5f1e8",
+
+        showPoweredByFidara: data.showPoweredByFidara,
+
+        rewardName: data.reward?.name ?? "",
+
+        rewardDescription: data.reward?.description ?? "",
+      });
+
+      setPreviews({
+        logo: absoluteUrl(data.cardLogoUrl),
+
+        activeStamp: absoluteUrl(data.activeStampImageUrl),
+
+        inactiveStamp: absoluteUrl(data.inactiveStampImageUrl),
+      });
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "No fue posible cargar el programa.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    void loadProgram();
+  }, [loadProgram]);
+
+  function updateField<Key extends keyof ProgramForm>(
+    field: Key,
+    value: ProgramForm[Key],
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setSuccess("");
+  }
+
+  function selectImage(
+    field: keyof ImageFiles,
+    previewField: keyof ImagePreviews,
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("La imagen no puede superar los 5 MB.");
+
+      event.target.value = "";
+      return;
+    }
+
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("Selecciona una imagen PNG, JPG o WebP.");
+
+      event.target.value = "";
+      return;
+    }
+
+    setFiles((current) => ({
+      ...current,
+      [field]: file,
+    }));
+
+    setPreviews((current) => {
+      const previous = current[previewField];
+
+      if (previous?.startsWith("blob:")) {
+        URL.revokeObjectURL(previous);
+      }
+
+      return {
+        ...current,
+        [previewField]: URL.createObjectURL(file),
+      };
+    });
+
+    setError("");
+    setSuccess("");
+  }
+
+  async function saveProgram(event: FormEvent) {
+    event.preventDefault();
+
+    if (!program || saving) {
+      return;
+    }
+
+    if (!form.name.trim()) {
+      setError("El nombre del programa es obligatorio.");
+
+      return;
+    }
+
+    if (!form.rewardName.trim()) {
+      setError("El nombre de la recompensa es obligatorio.");
+
+      return;
+    }
+
+    if (
+      !Number.isInteger(form.targetValue) ||
+      form.targetValue < 1 ||
+      form.targetValue > 20
+    ) {
+      setError("La meta debe ser un número entero entre 1 y 20.");
+
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const formData = new FormData();
+
+      formData.append("Name", form.name.trim());
+
+      formData.append("Description", form.description.trim());
+
+      formData.append("ProgramType", String(program.programType || 1));
+
+      formData.append("TargetValue", String(form.targetValue));
+
+      formData.append("IsRecurring", String(form.isRecurring));
+
+      formData.append("CardBackgroundColor", form.cardBackgroundColor);
+
+      formData.append("CardForegroundColor", form.cardForegroundColor);
+
+      formData.append("CardLabelColor", form.cardLabelColor);
+
+      formData.append("ShowPoweredByFidara", String(form.showPoweredByFidara));
+
+      formData.append("RewardName", form.rewardName.trim());
+
+      formData.append("RewardDescription", form.rewardDescription.trim());
+
+      if (files.logo) {
+        formData.append("Logo", files.logo);
+      }
+
+      if (files.activeStamp) {
+        formData.append("ActiveStamp", files.activeStamp);
+      }
+
+      if (files.inactiveStamp) {
+        formData.append("InactiveStamp", files.inactiveStamp);
+      }
+
+      const response = await fetch(`/api/programs/${program.id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload.message ?? "No fue posible guardar el programa.",
+        );
+      }
+
+      const updated: ProgramInformation = payload.data;
+
+      setProgram(updated);
+
+      setPreviews({
+        logo: absoluteUrl(updated.cardLogoUrl),
+
+        activeStamp: absoluteUrl(updated.activeStampImageUrl),
+
+        inactiveStamp: absoluteUrl(updated.inactiveStampImageUrl),
+      });
+
+      setFiles({
+        logo: null,
+        activeStamp: null,
+        inactiveStamp: null,
+      });
+
+      setSuccess(payload.message ?? "Programa actualizado correctamente.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "No fue posible guardar el programa.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="card-editor-loading">
+        <LoaderCircle className="scanner-spinner" size={28} />
+        Cargando programa...
+      </div>
+    );
+  }
+
+  return (
+    <div className="card-editor-page">
+      <section className="card-editor-heading">
+        <div>
+          <span className="page-eyebrow">Programa de lealtad</span>
+
+          <h1>Mi tarjeta</h1>
+
+          <p>
+            Personaliza la experiencia que tus clientes guardan en su Wallet.
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          form="program-form"
+          className="card-save-button"
+          disabled={saving}
+        >
+          {saving ? (
+            <>
+              <LoaderCircle className="scanner-spinner" size={18} />
+              Guardando...
+            </>
+          ) : (
+            <>
+              <Save size={18} />
+              Guardar cambios
+            </>
+          )}
+        </button>
+      </section>
+
+      {error && <div className="card-editor-alert error-box">{error}</div>}
+
+      {success && (
+        <div className="card-editor-alert success-box">
+          <Check size={18} />
+          {success}
+        </div>
+      )}
+
+      <div className="card-editor-layout">
+        <form
+          id="program-form"
+          className="card-settings"
+          onSubmit={saveProgram}
+        >
+          <section className="settings-card">
+            <div className="settings-card-heading">
+              <span>
+                <Stamp size={19} />
+              </span>
+
+              <div>
+                <h2>Programa</h2>
+                <p>Información principal de tu tarjeta.</p>
+              </div>
+            </div>
+
+            <div className="settings-fields">
+              <label>
+                <span>Nombre del programa</span>
+
+                <input
+                  value={form.name}
+                  onChange={(event) => updateField("name", event.target.value)}
+                  maxLength={100}
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Descripción</span>
+
+                <textarea
+                  value={form.description}
+                  onChange={(event) =>
+                    updateField("description", event.target.value)
+                  }
+                  rows={3}
+                  maxLength={300}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-heading">
+              <span>
+                <Gift size={19} />
+              </span>
+
+              <div>
+                <h2>Recompensa</h2>
+                <p>Define qué recibe el cliente.</p>
+              </div>
+            </div>
+
+            <div className="settings-fields reward-fields">
+              <label>
+                <span>Sellos requeridos</span>
+
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={form.targetValue}
+                  onChange={(event) =>
+                    updateField("targetValue", Number(event.target.value))
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Nombre de la recompensa</span>
+
+                <input
+                  value={form.rewardName}
+                  onChange={(event) =>
+                    updateField("rewardName", event.target.value)
+                  }
+                  placeholder="Ej. Café gratis"
+                  maxLength={100}
+                  required
+                />
+              </label>
+
+              <label className="full-field">
+                <span>Descripción de la recompensa</span>
+
+                <textarea
+                  value={form.rewardDescription}
+                  onChange={(event) =>
+                    updateField("rewardDescription", event.target.value)
+                  }
+                  rows={2}
+                  maxLength={250}
+                />
+              </label>
+
+              <label className="settings-toggle full-field">
+                <input
+                  type="checkbox"
+                  checked={form.isRecurring}
+                  onChange={(event) =>
+                    updateField("isRecurring", event.target.checked)
+                  }
+                />
+
+                <span className="toggle-control" />
+
+                <span>
+                  <strong>Reiniciar después del canje</strong>
+
+                  <br />
+                  <small>
+                    El cliente podrá comenzar otra tarjeta al recibir su premio.
+                  </small>
+                </span>
+                {/* 
+                <Repeat2 size={18} /> */}
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-heading">
+              <span>
+                <Palette size={19} />
+              </span>
+
+              <div>
+                <h2>Colores</h2>
+
+                <p>Ajusta la identidad visual.</p>
+              </div>
+            </div>
+
+            <div className="color-fields">
+              <label>
+                <span>Fondo</span>
+
+                <div className="color-input">
+                  <input
+                    type="color"
+                    value={form.cardBackgroundColor}
+                    onChange={(event) =>
+                      updateField("cardBackgroundColor", event.target.value)
+                    }
+                  />
+
+                  <strong>{form.cardBackgroundColor}</strong>
+                </div>
+              </label>
+
+              <label>
+                <span>Texto</span>
+
+                <div className="color-input">
+                  <input
+                    type="color"
+                    value={form.cardForegroundColor}
+                    onChange={(event) =>
+                      updateField("cardForegroundColor", event.target.value)
+                    }
+                  />
+
+                  <strong>{form.cardForegroundColor}</strong>
+                </div>
+              </label>
+
+              <label>
+                <span>Etiquetas</span>
+
+                <div className="color-input">
+                  <input
+                    type="color"
+                    value={form.cardLabelColor}
+                    onChange={(event) =>
+                      updateField("cardLabelColor", event.target.value)
+                    }
+                  />
+
+                  <strong>{form.cardLabelColor}</strong>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-heading">
+              <span>
+                <ImageIcon size={19} />
+              </span>
+
+              <div>
+                <h2>Imágenes</h2>
+
+                <p>PNG, JPG o WebP de máximo 5 MB.</p>
+              </div>
+            </div>
+
+            <div className="image-upload-grid">
+              <label className="image-upload">
+                <span>Logo de la tarjeta</span>
+
+                <div>
+                  {previews.logo ? (
+                    <img src={previews.logo} alt="Logo actual" />
+                  ) : (
+                    <ImageIcon size={24} />
+                  )}
+
+                  <strong>
+                    <Upload size={15} />
+                    Cambiar
+                  </strong>
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => selectImage("logo", "logo", event)}
+                />
+              </label>
+
+              <label className="image-upload">
+                <span>Sello activo</span>
+
+                <div>
+                  {previews.activeStamp ? (
+                    <img src={previews.activeStamp} alt="Sello activo" />
+                  ) : (
+                    <Stamp size={24} />
+                  )}
+
+                  <strong>
+                    <Upload size={15} />
+                    Cambiar
+                  </strong>
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) =>
+                    selectImage("activeStamp", "activeStamp", event)
+                  }
+                />
+              </label>
+
+              <label className="image-upload">
+                <span>Sello inactivo</span>
+
+                <div>
+                  {previews.inactiveStamp ? (
+                    <img src={previews.inactiveStamp} alt="Sello inactivo" />
+                  ) : (
+                    <Stamp size={24} />
+                  )}
+
+                  <strong>
+                    <Upload size={15} />
+                    Cambiar
+                  </strong>
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) =>
+                    selectImage("inactiveStamp", "inactiveStamp", event)
+                  }
+                />
+              </label>
+            </div>
+
+            {/* <label className="settings-toggle powered-toggle">
+              <input
+                type="checkbox"
+                checked={form.showPoweredByFidara}
+                onChange={(event) =>
+                  updateField("showPoweredByFidara", event.target.checked)
+                }
+              />
+
+              <span className="toggle-control" />
+
+              <span>
+                <strong>Mostrar Powered by Fidara</strong>
+
+                <small>Aparecerá junto al código QR.</small>
+              </span>
+            </label> */}
+          </section>
+        </form>
+
+        <aside className="wallet-preview-column">
+          <div className="wallet-preview-sticky">
+            <span className="page-eyebrow">Vista previa</span>
+
+            <h2>Apple Wallet</h2>
+
+            <div
+              className="wallet-card-preview"
+              style={{
+                backgroundColor: form.cardBackgroundColor || "#1b6726",
+                color: form.cardForegroundColor || "#ffffff",
+              }}
+            >
+              <div className="wallet-preview-top">
+                {previews.logo ? (
+                  <img src={previews.logo} alt="Logo del programa" />
+                ) : (
+                  <strong>{form.name || "Tu programa"}</strong>
+                )}
+              </div>
+
+              <div className="wallet-stamps-preview">
+                {Array.from({
+                  length: Math.min(Number(form.targetValue) || 10, 10),
+                }).map((_, index) => {
+                  const completed = index < 4;
+                  const imageUrl = completed
+                    ? previews.activeStamp
+                    : previews.inactiveStamp;
+
+                  return (
+                    <span
+                      key={index}
+                      className={completed ? "active" : "inactive"}
+                    >
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={
+                            completed ? "Sello acumulado" : "Sello pendiente"
+                          }
+                        />
+                      ) : (
+                        <span className="stamp-placeholder" />
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <div className="wallet-preview-stats">
+                <div>
+                  <small style={{ color: form.cardLabelColor }}>
+                    TU PROGRESO
+                  </small>
+
+                  <strong>
+                    {Math.min(4, Number(form.targetValue) || 10)} de{" "}
+                    {Number(form.targetValue) || 10}
+                  </strong>
+                </div>
+
+                <div>
+                  <small style={{ color: form.cardLabelColor }}>
+                    RECOMPENSAS DISPONIBLES
+                  </small>
+
+                  <strong>0 recompensas</strong>
+                </div>
+              </div>
+
+              <a
+                className="wallet-qr-preview"
+                href="https://fidara.mx"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Abrir Fidara"
+              >
+                <QRCodeSVG
+                  value="https://fidara.mx"
+                  size={116}
+                  level="M"
+                  marginSize={1}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  title="Código QR de Fidara"
+                />
+
+                {form.showPoweredByFidara && <small>Powered by Fidara</small>}
+              </a>
+            </div>
+
+            <p className="preview-note">
+              Esta vista es aproximada. Apple Wallet ajusta algunos tamaños
+              según el dispositivo.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
