@@ -1,41 +1,36 @@
 "use client";
 
-import {
-  ChangeEvent,
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
-  Gift,
-  ImageIcon,
+  CreditCard,
   LoaderCircle,
-  Palette,
-  Repeat2,
-  Save,
-  Stamp,
-  Upload,
+  Plus,
+  Trash2,
+  Users,
+  WalletCards,
 } from "lucide-react";
+import { WalletCardPreview } from "@/components/dashboard/wallet-card-preview";
+import { useCallback, useEffect, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-import { QRCodeSVG } from "qrcode.react";
-
-type RewardInformation = {
+type ProgramSummary = {
   id: string;
   name: string;
   description?: string | null;
-  requiredValue: number;
-};
-
-type ProgramInformation = {
-  id: string;
-  name: string;
-  description?: string | null;
-  programType: number;
   targetValue: number;
   isRecurring: boolean;
+  isActive: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
   inactiveStampImageUrl?: string | null;
@@ -43,32 +38,15 @@ type ProgramInformation = {
   cardForegroundColor?: string | null;
   cardLabelColor?: string | null;
   showPoweredByFidara: boolean;
-  reward: RewardInformation;
-};
+  customerCount: number;
+  installedCards: number;
 
-type ProgramForm = {
-  name: string;
-  description: string;
-  targetValue: number;
-  isRecurring: boolean;
-  cardBackgroundColor: string;
-  cardForegroundColor: string;
-  cardLabelColor: string;
-  showPoweredByFidara: boolean;
-  rewardName: string;
-  rewardDescription: string;
-};
-
-type ImageFiles = {
-  logo: File | null;
-  activeStamp: File | null;
-  inactiveStamp: File | null;
-};
-
-type ImagePreviews = {
-  logo: string | null;
-  activeStamp: string | null;
-  inactiveStamp: string | null;
+  reward?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    requiredValue: number;
+  } | null;
 };
 
 const apiUrl =
@@ -90,52 +68,29 @@ function absoluteUrl(value?: string | null) {
   return `${apiUrl}${value}`;
 }
 
-const initialForm: ProgramForm = {
-  name: "",
-  description: "",
-  targetValue: 10,
-  isRecurring: true,
-  cardBackgroundColor: "#1b6726",
-  cardForegroundColor: "#ffffff",
-  cardLabelColor: "#f5f1e8",
-  showPoweredByFidara: true,
-  rewardName: "",
-  rewardDescription: "",
-};
-
-export default function CardEditorPage() {
+export default function ProgramsPage() {
   const router = useRouter();
 
-  const [program, setProgram] = useState<ProgramInformation | null>(null);
-
-  const [form, setForm] = useState<ProgramForm>(initialForm);
-
-  const [files, setFiles] = useState<ImageFiles>({
-    logo: null,
-    activeStamp: null,
-    inactiveStamp: null,
-  });
-
-  const [previews, setPreviews] = useState<ImagePreviews>({
-    logo: null,
-    activeStamp: null,
-    inactiveStamp: null,
-  });
+  const [programs, setPrograms] = useState<ProgramSummary[]>([]);
 
   const [loading, setLoading] = useState(true);
 
-  const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
 
-  const [success, setSuccess] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const loadProgram = useCallback(async () => {
+  const [programToDelete, setProgramToDelete] = useState<ProgramSummary | null>(
+    null,
+  );
+
+  const [deleting, setDeleting] = useState(false);
+
+  const loadPrograms = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/programs/current", {
+      const response = await fetch("/api/programs", {
         cache: "no-store",
       });
 
@@ -148,189 +103,36 @@ export default function CardEditorPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible cargar el programa.",
+          payload.message ?? "No fue posible cargar las tarjetas.",
         );
       }
 
-      const data: ProgramInformation = payload.data;
-
-      setProgram(data);
-
-      setForm({
-        name: data.name,
-        description: data.description ?? "",
-
-        targetValue: Number(data.targetValue),
-
-        isRecurring: data.isRecurring,
-
-        cardBackgroundColor: data.cardBackgroundColor ?? "#1b6726",
-
-        cardForegroundColor: data.cardForegroundColor ?? "#ffffff",
-
-        cardLabelColor: data.cardLabelColor ?? "#f5f1e8",
-
-        showPoweredByFidara: data.showPoweredByFidara,
-
-        rewardName: data.reward?.name ?? "",
-
-        rewardDescription: data.reward?.description ?? "",
-      });
-
-      setPreviews({
-        logo: absoluteUrl(data.cardLogoUrl),
-
-        activeStamp: absoluteUrl(data.activeStampImageUrl),
-
-        inactiveStamp: absoluteUrl(data.inactiveStampImageUrl),
-      });
+      setPrograms(payload.data ?? []);
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible cargar el programa.",
+          : "No fue posible cargar las tarjetas.",
       );
     } finally {
       setLoading(false);
     }
   }, [router]);
 
-  useEffect(() => {
-    void loadProgram();
-  }, [loadProgram]);
-
-  function updateField<Key extends keyof ProgramForm>(
-    field: Key,
-    value: ProgramForm[Key],
-  ) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-
-    setSuccess("");
-  }
-
-  function selectImage(
-    field: keyof ImageFiles,
-    previewField: keyof ImagePreviews,
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
+  async function deleteProgram() {
+    if (!programToDelete || deleting) {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("La imagen no puede superar los 5 MB.");
+    const selectedProgram = programToDelete;
 
-      event.target.value = "";
-      return;
-    }
-
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setError("Selecciona una imagen PNG, JPG o WebP.");
-
-      event.target.value = "";
-      return;
-    }
-
-    setFiles((current) => ({
-      ...current,
-      [field]: file,
-    }));
-
-    setPreviews((current) => {
-      const previous = current[previewField];
-
-      if (previous?.startsWith("blob:")) {
-        URL.revokeObjectURL(previous);
-      }
-
-      return {
-        ...current,
-        [previewField]: URL.createObjectURL(file),
-      };
-    });
-
+    setDeleting(true);
     setError("");
-    setSuccess("");
-  }
-
-  async function saveProgram(event: FormEvent) {
-    event.preventDefault();
-
-    if (!program || saving) {
-      return;
-    }
-
-    if (!form.name.trim()) {
-      setError("El nombre del programa es obligatorio.");
-
-      return;
-    }
-
-    if (!form.rewardName.trim()) {
-      setError("El nombre de la recompensa es obligatorio.");
-
-      return;
-    }
-
-    if (
-      !Number.isInteger(form.targetValue) ||
-      form.targetValue < 1 ||
-      form.targetValue > 20
-    ) {
-      setError("La meta debe ser un número entero entre 1 y 20.");
-
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    setSuccess("");
+    setNotice("");
 
     try {
-      const formData = new FormData();
-
-      formData.append("Name", form.name.trim());
-
-      formData.append("Description", form.description.trim());
-
-      formData.append("ProgramType", String(program.programType || 1));
-
-      formData.append("TargetValue", String(form.targetValue));
-
-      formData.append("IsRecurring", String(form.isRecurring));
-
-      formData.append("CardBackgroundColor", form.cardBackgroundColor);
-
-      formData.append("CardForegroundColor", form.cardForegroundColor);
-
-      formData.append("CardLabelColor", form.cardLabelColor);
-
-      formData.append("ShowPoweredByFidara", String(form.showPoweredByFidara));
-
-      formData.append("RewardName", form.rewardName.trim());
-
-      formData.append("RewardDescription", form.rewardDescription.trim());
-
-      if (files.logo) {
-        formData.append("Logo", files.logo);
-      }
-
-      if (files.activeStamp) {
-        formData.append("ActiveStamp", files.activeStamp);
-      }
-
-      if (files.inactiveStamp) {
-        formData.append("InactiveStamp", files.inactiveStamp);
-      }
-
-      const response = await fetch(`/api/programs/${program.id}`, {
-        method: "PUT",
-        body: formData,
+      const response = await fetch(`/api/programs/${selectedProgram.id}`, {
+        method: "DELETE",
       });
 
       const payload = await response.json();
@@ -342,488 +144,263 @@ export default function CardEditorPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible guardar el programa.",
+          payload.message ?? "No fue posible eliminar la tarjeta.",
         );
       }
 
-      const updated: ProgramInformation = payload.data;
+      if (payload.deleted) {
+        setPrograms((current) =>
+          current.filter((program) => program.id !== selectedProgram.id),
+        );
+      }
 
-      setProgram(updated);
+      if (payload.archived) {
+        setPrograms((current) =>
+          current.map((program) =>
+            program.id === selectedProgram.id
+              ? {
+                  ...program,
+                  isActive: false,
+                }
+              : program,
+          ),
+        );
+      }
 
-      setPreviews({
-        logo: absoluteUrl(updated.cardLogoUrl),
+      setNotice(payload.message ?? "La tarjeta fue procesada correctamente.");
 
-        activeStamp: absoluteUrl(updated.activeStampImageUrl),
-
-        inactiveStamp: absoluteUrl(updated.inactiveStampImageUrl),
-      });
-
-      setFiles({
-        logo: null,
-        activeStamp: null,
-        inactiveStamp: null,
-      });
-
-      setSuccess(payload.message ?? "Programa actualizado correctamente.");
+      setProgramToDelete(null);
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible guardar el programa.",
+          : "No fue posible eliminar la tarjeta.",
       );
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
+  useEffect(() => {
+    void loadPrograms();
+  }, [loadPrograms]);
+
   if (loading) {
     return (
-      <div className="card-editor-loading">
+      <div className="programs-loading">
         <LoaderCircle className="scanner-spinner" size={28} />
-        Cargando programa...
+        Cargando tarjetas...
       </div>
     );
   }
 
   return (
-    <div className="card-editor-page">
-      <section className="card-editor-heading">
+    <main className="programs-page">
+      <header className="programs-heading">
         <div>
-          <span className="page-eyebrow">Programa de lealtad</span>
+          <span className="page-eyebrow">Programas de lealtad</span>
 
-          <h1>Mi tarjeta</h1>
+          <h1>Mis tarjetas</h1>
 
           <p>
-            Personaliza la experiencia que tus clientes guardan en su Wallet.
+            Crea y administra las tarjetas que tus clientes guardan en su
+            Wallet.
           </p>
         </div>
 
-        <button
-          type="submit"
-          form="program-form"
-          className="card-save-button"
-          disabled={saving}
-        >
-          {saving ? (
-            <>
-              <LoaderCircle className="scanner-spinner" size={18} />
-              Guardando...
-            </>
-          ) : (
-            <>
-              <Save size={18} />
-              Guardar cambios
-            </>
-          )}
-        </button>
-      </section>
+        <Link href="/dashboard/tarjeta/nueva" className="create-program-button">
+          <Plus size={19} />
+          Crear tarjeta
+        </Link>
+      </header>
 
-      {error && <div className="card-editor-alert error-box">{error}</div>}
-
-      {success && (
-        <div className="card-editor-alert success-box">
+      {notice && (
+        <div className="programs-notice">
           <Check size={18} />
-          {success}
+          {notice}
         </div>
       )}
 
-      <div className="card-editor-layout">
-        <form
-          id="program-form"
-          className="card-settings"
-          onSubmit={saveProgram}
-        >
-          <section className="settings-card">
-            <div className="settings-card-heading">
-              <span>
-                <Stamp size={19} />
-              </span>
+      {error && (
+        <div className="programs-error">
+          {error}
 
-              <div>
-                <h2>Programa</h2>
-                <p>Información principal de tu tarjeta.</p>
+          <button type="button" onClick={() => void loadPrograms()}>
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <section className="program-gallery">
+        <Link href="/dashboard/tarjeta/nueva" className="new-program-tile">
+          <div className="new-program-preview">
+            <Plus size={34} />
+          </div>
+
+          <strong>Crear una tarjeta</strong>
+
+          <span>Diseña un nuevo programa desde cero.</span>
+        </Link>
+
+        {programs.map((program) => {
+          const target = Math.max(
+            1,
+            Math.round(Number(program.targetValue) || 10),
+          );
+
+          const logoUrl = absoluteUrl(program.cardLogoUrl);
+
+          const activeStampUrl = absoluteUrl(program.activeStampImageUrl);
+
+          const inactiveStampUrl = absoluteUrl(program.inactiveStampImageUrl);
+
+          return (
+            <article key={program.id} className="loyalty-program-tile">
+              <div className="program-status">
+                <span className={program.isActive ? "active" : "inactive"} />
+
+                {program.isActive ? "Tarjeta activa" : "Tarjeta inactiva"}
               </div>
-            </div>
 
-            <div className="settings-fields">
-              <label>
-                <span>Nombre del programa</span>
-
-                <input
-                  value={form.name}
-                  onChange={(event) => updateField("name", event.target.value)}
-                  maxLength={100}
-                  required
-                />
-              </label>
-
-              <label>
-                <span>Descripción</span>
-
-                <textarea
-                  value={form.description}
-                  onChange={(event) =>
-                    updateField("description", event.target.value)
-                  }
-                  rows={3}
-                  maxLength={300}
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="settings-card">
-            <div className="settings-card-heading">
-              <span>
-                <Gift size={19} />
-              </span>
-
-              <div>
-                <h2>Recompensa</h2>
-                <p>Define qué recibe el cliente.</p>
-              </div>
-            </div>
-
-            <div className="settings-fields reward-fields">
-              <label>
-                <span>Sellos requeridos</span>
-
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  step={1}
-                  value={form.targetValue}
-                  onChange={(event) =>
-                    updateField("targetValue", Number(event.target.value))
-                  }
-                  required
-                />
-              </label>
-
-              <label>
-                <span>Nombre de la recompensa</span>
-
-                <input
-                  value={form.rewardName}
-                  onChange={(event) =>
-                    updateField("rewardName", event.target.value)
-                  }
-                  placeholder="Ej. Café gratis"
-                  maxLength={100}
-                  required
-                />
-              </label>
-
-              <label className="full-field">
-                <span>Descripción de la recompensa</span>
-
-                <textarea
-                  value={form.rewardDescription}
-                  onChange={(event) =>
-                    updateField("rewardDescription", event.target.value)
-                  }
-                  rows={2}
-                  maxLength={250}
-                />
-              </label>
-
-              <label className="settings-toggle full-field">
-                <input
-                  type="checkbox"
-                  checked={form.isRecurring}
-                  onChange={(event) =>
-                    updateField("isRecurring", event.target.checked)
-                  }
-                />
-
-                <span className="toggle-control" />
-
-                <span>
-                  <strong>Reiniciar después del canje</strong>
-
-                  <br />
-                  <small>
-                    El cliente podrá comenzar otra tarjeta al recibir su premio.
-                  </small>
-                </span>
-                {/* 
-                <Repeat2 size={18} /> */}
-              </label>
-            </div>
-          </section>
-
-          <section className="settings-card">
-            <div className="settings-card-heading">
-              <span>
-                <Palette size={19} />
-              </span>
-
-              <div>
-                <h2>Colores</h2>
-
-                <p>Ajusta la identidad visual.</p>
-              </div>
-            </div>
-
-            <div className="color-fields">
-              <label>
-                <span>Fondo</span>
-
-                <div className="color-input">
-                  <input
-                    type="color"
-                    value={form.cardBackgroundColor}
-                    onChange={(event) =>
-                      updateField("cardBackgroundColor", event.target.value)
-                    }
+              <Link
+                href={`/dashboard/tarjeta/${program.id}`}
+                className="program-phone-link"
+                aria-label={`Editar ${program.name}`}
+              >
+                <div className="program-phone-preview">
+                  <WalletCardPreview
+                    name={program.name}
+                    logoUrl={logoUrl}
+                    activeStampUrl={activeStampUrl}
+                    inactiveStampUrl={inactiveStampUrl}
+                    backgroundColor={program.cardBackgroundColor}
+                    foregroundColor={program.cardForegroundColor}
+                    labelColor={program.cardLabelColor}
+                    targetValue={target}
+                    balance={4}
+                    rewardsAvailable={0}
+                    showPoweredByFidara={program.showPoweredByFidara}
+                    compact
+                    phoneFrame
                   />
-
-                  <strong>{form.cardBackgroundColor}</strong>
                 </div>
-              </label>
+              </Link>
 
-              <label>
-                <span>Texto</span>
-
-                <div className="color-input">
-                  <input
-                    type="color"
-                    value={form.cardForegroundColor}
-                    onChange={(event) =>
-                      updateField("cardForegroundColor", event.target.value)
-                    }
-                  />
-
-                  <strong>{form.cardForegroundColor}</strong>
-                </div>
-              </label>
-
-              <label>
-                <span>Etiquetas</span>
-
-                <div className="color-input">
-                  <input
-                    type="color"
-                    value={form.cardLabelColor}
-                    onChange={(event) =>
-                      updateField("cardLabelColor", event.target.value)
-                    }
-                  />
-
-                  <strong>{form.cardLabelColor}</strong>
-                </div>
-              </label>
-            </div>
-          </section>
-
-          <section className="settings-card">
-            <div className="settings-card-heading">
-              <span>
-                <ImageIcon size={19} />
-              </span>
-
-              <div>
-                <h2>Imágenes</h2>
-
-                <p>PNG, JPG o WebP de máximo 5 MB.</p>
-              </div>
-            </div>
-
-            <div className="image-upload-grid">
-              <label className="image-upload">
-                <span>Logo de la tarjeta</span>
-
+              <div className="program-tile-information">
                 <div>
-                  {previews.logo ? (
-                    <img src={previews.logo} alt="Logo actual" />
-                  ) : (
-                    <ImageIcon size={24} />
-                  )}
+                  <h2>{program.name}</h2>
 
-                  <strong>
-                    <Upload size={15} />
-                    Cambiar
-                  </strong>
+                  <p>{program.reward?.name ?? "Recompensa no configurada"}</p>
                 </div>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) => selectImage("logo", "logo", event)}
-                />
-              </label>
+                <div className="program-metrics">
+                  <span>
+                    <Users size={15} />
+                    {program.customerCount} clientes
+                  </span>
 
-              <label className="image-upload">
-                <span>Sello activo</span>
-
-                <div>
-                  {previews.activeStamp ? (
-                    <img src={previews.activeStamp} alt="Sello activo" />
-                  ) : (
-                    <Stamp size={24} />
-                  )}
-
-                  <strong>
-                    <Upload size={15} />
-                    Cambiar
-                  </strong>
+                  <span>
+                    <WalletCards size={15} />
+                    {program.installedCards} instaladas
+                  </span>
                 </div>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) =>
-                    selectImage("activeStamp", "activeStamp", event)
-                  }
-                />
-              </label>
+                <div className="program-actions">
+                  <Link
+                    href={`/dashboard/tarjeta/${program.id}`}
+                    className="edit-program-button"
+                  >
+                    <CreditCard size={17} />
+                    Editar tarjeta
+                  </Link>
 
-              <label className="image-upload">
-                <span>Sello inactivo</span>
-
-                <div>
-                  {previews.inactiveStamp ? (
-                    <img src={previews.inactiveStamp} alt="Sello inactivo" />
-                  ) : (
-                    <Stamp size={24} />
-                  )}
-
-                  <strong>
-                    <Upload size={15} />
-                    Cambiar
-                  </strong>
+                  <button
+                    type="button"
+                    className="delete-program-button"
+                    onClick={() => {
+                      setNotice("");
+                      setError("");
+                      setProgramToDelete(program);
+                    }}
+                    aria-label={`Eliminar ${program.name}`}
+                    title="Eliminar tarjeta"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) =>
-                    selectImage("inactiveStamp", "inactiveStamp", event)
-                  }
-                />
-              </label>
-            </div>
-
-            {/* <label className="settings-toggle powered-toggle">
-              <input
-                type="checkbox"
-                checked={form.showPoweredByFidara}
-                onChange={(event) =>
-                  updateField("showPoweredByFidara", event.target.checked)
-                }
-              />
-
-              <span className="toggle-control" />
-
-              <span>
-                <strong>Mostrar Powered by Fidara</strong>
-
-                <small>Aparecerá junto al código QR.</small>
-              </span>
-            </label> */}
-          </section>
-        </form>
-
-        <aside className="wallet-preview-column">
-          <div className="wallet-preview-sticky">
-            <span className="page-eyebrow">Vista previa</span>
-
-            <h2>Apple Wallet</h2>
-
-            <div
-              className="wallet-card-preview"
-              style={{
-                backgroundColor: form.cardBackgroundColor || "#1b6726",
-                color: form.cardForegroundColor || "#ffffff",
-              }}
-            >
-              <div className="wallet-preview-top">
-                {previews.logo ? (
-                  <img src={previews.logo} alt="Logo del programa" />
-                ) : (
-                  <strong>{form.name || "Tu programa"}</strong>
+                {program.isRecurring && (
+                  <span className="recurring-program">
+                    <Check size={14} />
+                    Se reinicia después del canje
+                  </span>
                 )}
               </div>
-
-              <div className="wallet-stamps-preview">
-                {Array.from({
-                  length: Math.min(Number(form.targetValue) || 10, 10),
-                }).map((_, index) => {
-                  const completed = index < 4;
-                  const imageUrl = completed
-                    ? previews.activeStamp
-                    : previews.inactiveStamp;
-
-                  return (
-                    <span
-                      key={index}
-                      className={completed ? "active" : "inactive"}
-                    >
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={
-                            completed ? "Sello acumulado" : "Sello pendiente"
-                          }
-                        />
-                      ) : (
-                        <span className="stamp-placeholder" />
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-
-              <div className="wallet-preview-stats">
-                <div>
-                  <small style={{ color: form.cardLabelColor }}>
-                    TU PROGRESO
-                  </small>
-
-                  <strong>
-                    {Math.min(4, Number(form.targetValue) || 10)} de{" "}
-                    {Number(form.targetValue) || 10}
-                  </strong>
-                </div>
-
-                <div>
-                  <small style={{ color: form.cardLabelColor }}>
-                    RECOMPENSAS DISPONIBLES
-                  </small>
-
-                  <strong>0 recompensas</strong>
-                </div>
-              </div>
-
-              <a
-                className="wallet-qr-preview"
-                href="https://fidara.mx"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Abrir Fidara"
-              >
-                <QRCodeSVG
-                  value="https://fidara.mx"
-                  size={116}
-                  level="M"
-                  marginSize={1}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                  title="Código QR de Fidara"
-                />
-
-                {form.showPoweredByFidara && <small>Powered by Fidara</small>}
-              </a>
+            </article>
+          );
+        })}
+      </section>
+      <AlertDialog
+        open={programToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setProgramToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="delete-program-dialog">
+          <AlertDialogHeader>
+            <div className="delete-program-icon">
+              <Trash2 size={22} />
             </div>
 
-            <p className="preview-note">
-              Esta vista es aproximada. Apple Wallet ajusta algunos tamaños
-              según el dispositivo.
+            <AlertDialogTitle>¿Eliminar esta tarjeta?</AlertDialogTitle>
+
+            <AlertDialogDescription>
+              Estás por eliminar <strong>{programToDelete?.name}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="delete-program-warning">
+            <strong>¿Qué sucederá?</strong>
+
+            <p>
+              Si la tarjeta nunca ha sido entregada a clientes, se eliminará
+              definitivamente.
+            </p>
+
+            <p>
+              Si ya tiene clientes o movimientos, se archivará para conservar su
+              historial.
             </p>
           </div>
-        </aside>
-      </div>
-    </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+
+            <AlertDialogAction
+              className="delete-program-confirm"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteProgram();
+              }}
+            >
+              {deleting ? (
+                <>
+                  <LoaderCircle className="scanner-spinner" size={17} />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <Trash2 size={17} />
+                  Sí, eliminar
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
   );
 }

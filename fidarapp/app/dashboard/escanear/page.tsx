@@ -349,16 +349,17 @@ export default function ScannerPage() {
             <div className="camera-section">
               <div className="camera-frame">
                 <Scanner
+                
                   paused={loading}
                   formats={["qr_code"]}
                   constraints={{
                     facingMode: "environment",
                   }}
+                  sound={false}
                   components={{
                     finder: true,
                     torch: true,
                     zoom: true,
-                    audio: true,
                   }}
                   onScan={(codes) => {
                     const value = codes[0]?.rawValue;
