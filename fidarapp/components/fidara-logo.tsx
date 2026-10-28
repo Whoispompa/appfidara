@@ -13,7 +13,7 @@ export function FidaraLogo({
       aria-label="Fidara, inicio"
     >
       <Image
-        src="/Fidara-logo-horizontal.png"
+        src="/Fidara-logo-blanco.png"
         alt="Fidara"
         width={150}
         height={44}

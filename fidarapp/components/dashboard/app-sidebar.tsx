@@ -163,7 +163,7 @@ export function AppSidebar({
               />
             ) : (
               <Image
-                src="/Fidara-logo-horizontal.png"
+                src="/Fidara-logo-blanco.png"
                 alt="Fidara"
                 width={142}
                 height={42}
