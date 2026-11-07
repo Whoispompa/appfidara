@@ -15,6 +15,7 @@ import {
   Settings,
   UserRoundCog,
   Users,
+  ChartSpline,
 } from "lucide-react";
 
 import {
@@ -67,6 +68,11 @@ const navigation = [
     label: "Estadísticas",
     href: "/dashboard/estadisticas",
     icon: BarChart3,
+  },
+  {
+    label: "Marketing",
+    href: "/dashboard/marketing",
+    icon: ChartSpline,
   },
 ];
 

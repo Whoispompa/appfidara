@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Variables
+.env
+.env.local
+.env.production
+
+# Publicación local
+fidaranewpublic/
+fidarapublish/
+publish/
+
+# Logs
+*.log
+logs/
