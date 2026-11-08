@@ -26,36 +26,72 @@ export default function LoginPage() {
         sessionStorage.removeItem("fidara_registered_email");
       });
   }, []);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const response = await fetch("/api/auth/login", {
+async function submit(
+  event: FormEvent,
+) {
+  event.preventDefault();
+
+  setError("");
+  setLoading(true);
+
+  try {
+    const response = await fetch(
+      "/api/auth/login",
+      {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, remember }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(
-          payload.message ?? "No pudimos iniciar sesión. Revisa tus datos.",
-        );
-      sessionStorage.setItem(
-        "fidara_session",
-        JSON.stringify(payload.data ?? {}),
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          email,
+          password,
+          remember,
+        }),
+      },
+    );
+
+    const payload = await response
+      .json()
+      .catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        payload.message ??
+          "No pudimos iniciar sesión. Revisa tus datos.",
       );
-      window.location.href = "/dashboard";
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Ocurrió un error inesperado.",
-      );
-    } finally {
-      setLoading(false);
     }
+
+    const sessionData =
+      payload.data ?? {};
+
+    sessionStorage.setItem(
+      "fidara_session",
+      JSON.stringify(sessionData),
+    );
+
+    const requestedPath =
+      sessionData.nextPath;
+
+    const nextPath =
+      typeof requestedPath === "string" &&
+      requestedPath.startsWith("/") &&
+      !requestedPath.startsWith("//")
+        ? requestedPath
+        : "/dashboard";
+
+    window.location.assign(nextPath);
+  } catch (caught) {
+    setError(
+      caught instanceof Error
+        ? caught.message
+        : "Ocurrió un error inesperado.",
+    );
+  } finally {
+    setLoading(false);
   }
+}
   return (
     <AuthShell mode="login">
       <div className="form-wrap">

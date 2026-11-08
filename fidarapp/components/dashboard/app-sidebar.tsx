@@ -71,7 +71,7 @@ const navigation = [
   },
   {
     label: "Marketing",
-    href: "/dashboard/marketing",
+    href: "/dashboard/notificaciones",
     icon: ChartSpline,
   },
 ];

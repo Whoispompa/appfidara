@@ -12,6 +12,8 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import GooglePlacePicker from
+  "@/components/locations/google-place-picker";
 
 type RecentTransaction = {
   id: string;

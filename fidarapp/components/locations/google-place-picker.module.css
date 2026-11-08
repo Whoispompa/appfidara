@@ -1,0 +1,137 @@
+.picker {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 24px;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.picker:focus-within {
+  z-index: 1000;
+}
+
+.label {
+  display: block;
+  margin: 0;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.autocomplete {
+  position: relative;
+  z-index: 1001;
+  width: 100%;
+  overflow: visible;
+}
+
+/*
+ * El web component de Google ocupa
+ * directamente el ancho del formulario.
+ */
+.autocomplete
+  :global(gmp-place-autocomplete) {
+  display: block;
+  width: 100%;
+  color-scheme: light;
+}
+
+.map {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 270px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 13px;
+}
+
+.placeSummary {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  padding: 5px 2px 0;
+  margin: 0;
+  color: #111827;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.placeSummary > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #e11d48;
+}
+
+.placeSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.placeSummary strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.placeSummary span {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.spinner {
+  color: #e11d48;
+  animation: spin 800ms linear infinite;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  color: #b91c1c;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .picker {
+    margin-top: 20px;
+  }
+
+  .map {
+    height: 225px;
+  }
+}

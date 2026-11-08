@@ -11,7 +11,11 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 import {
   DropdownMenu,
@@ -34,19 +38,33 @@ type AppHeaderProps = {
   onOpenMobileMenu: () => void;
 };
 
-const apiUrl =
-  process.env.NEXT_PUBLIC_FIDARA_API_URL ?? "https://api.fidara.mx";
+type BrandingResponse = {
+  success?: boolean;
+  data?: {
+    organizationLogoUrl?: string | null;
+    programs?: Array<{
+      logoUrl?: string | null;
+      isActive?: boolean;
+    }>;
+  };
+};
+
+const apiUrl = (
+  process.env.NEXT_PUBLIC_FIDARA_API_URL ??
+  "https://api.fidara.mx"
+).replace(/\/$/, "");
 
 function createAbsoluteLogoUrl(logoUrl?: string | null) {
-  if (!logoUrl) {
-    return null;
-  }
+  if (!logoUrl) return null;
 
-  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
+  if (
+    logoUrl.startsWith("http://") ||
+    logoUrl.startsWith("https://")
+  ) {
     return logoUrl;
   }
 
-  return `${apiUrl}${logoUrl}`;
+  return `${apiUrl}/${logoUrl.replace(/^\//, "")}`;
 }
 
 function getInitials(value: string) {
@@ -62,50 +80,140 @@ function getRoleName(role?: string) {
   switch (role) {
     case "Owner":
       return "Propietario";
-
     case "Admin":
       return "Administrador";
-
     case "Manager":
       return "Gerente";
-
     case "Employee":
       return "Empleado";
-
     default:
       return "Usuario";
   }
 }
 
-export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
+export function AppHeader({
+  onOpenMobileMenu,
+}: AppHeaderProps) {
   const router = useRouter();
-
-  const [session, setSession] = useState<SessionData | null>(null);
+  const [session, setSession] =
+    useState<SessionData | null>(null);
 
   useEffect(() => {
-    try {
-      const storedSession = sessionStorage.getItem("fidara_session");
+    function synchronizeSession() {
+      try {
+        const storedSession = sessionStorage.getItem(
+          "fidara_session",
+        );
 
-      if (!storedSession) {
+        if (!storedSession) {
+          router.replace("/login");
+          return;
+        }
+
+        const saved = JSON.parse(storedSession) as Partial<SessionData>;
+
+        setSession({
+          userName: saved.userName || "Usuario",
+          organizationName:
+            saved.organizationName || "Negocio",
+          organizationLogoUrl:
+            saved.organizationLogoUrl || null,
+          role: saved.role || "Employee",
+        });
+      } catch {
+        sessionStorage.removeItem("fidara_session");
         router.replace("/login");
-        return;
       }
-
-      const saved = JSON.parse(storedSession);
-
-      setSession({
-        userName: saved.userName || "Usuario",
-
-        organizationName: saved.organizationName || "Negocio",
-
-        organizationLogoUrl: saved.organizationLogoUrl || null,
-
-        role: saved.role || "Employee",
-      });
-    } catch {
-      sessionStorage.removeItem("fidara_session");
-      router.replace("/login");
     }
+
+    async function synchronizeBranding() {
+      try {
+        const response = await fetch(
+          "/api/settings/branding",
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) return;
+
+        const payload =
+          (await response.json()) as BrandingResponse;
+
+        const activeProgram =
+          payload.data?.programs?.find(
+            (program) => program.isActive,
+          ) ?? payload.data?.programs?.[0];
+
+        const logoUrl =
+          payload.data?.organizationLogoUrl ??
+          activeProgram?.logoUrl ??
+          null;
+
+        if (!logoUrl) return;
+
+        setSession((current) =>
+          current
+            ? {
+                ...current,
+                organizationLogoUrl: logoUrl,
+              }
+            : current,
+        );
+
+        const rawSession = sessionStorage.getItem(
+          "fidara_session",
+        );
+
+        if (rawSession) {
+          const saved = JSON.parse(rawSession) as Record<
+            string,
+            unknown
+          >;
+
+          sessionStorage.setItem(
+            "fidara_session",
+            JSON.stringify({
+              ...saved,
+              organizationLogoUrl: logoUrl,
+            }),
+          );
+        }
+      } catch {
+        // Conserva las iniciales si la configuración no está disponible.
+      }
+    }
+
+    function handleBrandingUpdated() {
+      synchronizeSession();
+      void synchronizeBranding();
+    }
+
+    synchronizeSession();
+
+    void synchronizeBranding();
+
+    window.addEventListener(
+      "fidara:branding-updated",
+      handleBrandingUpdated,
+    );
+
+    window.addEventListener(
+      "storage",
+      synchronizeSession,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "fidara:branding-updated",
+        handleBrandingUpdated,
+      );
+
+      window.removeEventListener(
+        "storage",
+        synchronizeSession,
+      );
+    };
   }, [router]);
 
   async function logout() {
@@ -134,7 +242,6 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
 
         <div className="organization-summary">
           <span className="organization-logo-placeholder">•</span>
-
           <div className="organization-copy">
             <small>Espacio de trabajo</small>
             <strong>Cargando...</strong>
@@ -148,7 +255,9 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
     );
   }
 
-  const organizationLogo = createAbsoluteLogoUrl(session.organizationLogoUrl);
+  const organizationLogo = createAbsoluteLogoUrl(
+    session.organizationLogoUrl,
+  );
 
   return (
     <header className="app-header">
@@ -165,6 +274,7 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
         <Avatar size="lg" className="business-avatar">
           {organizationLogo && (
             <AvatarImage
+              key={organizationLogo}
               src={organizationLogo}
               alt={`Logo de ${session.organizationName}`}
             />
@@ -177,7 +287,6 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
 
         <div className="organization-copy">
           <small>Espacio de trabajo</small>
-
           <strong>{session.organizationName}</strong>
         </div>
       </div>
@@ -187,6 +296,9 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
           type="button"
           className="icon-button"
           aria-label="Notificaciones"
+          onClick={() =>
+            router.push("/dashboard/notificaciones")
+          }
         >
           <Bell size={19} />
         </button>
@@ -202,12 +314,13 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
             }
           >
             <Avatar className="user-avatar after:hidden">
-              <AvatarFallback>{getInitials(session.userName)}</AvatarFallback>
+              <AvatarFallback>
+                {getInitials(session.userName)}
+              </AvatarFallback>
             </Avatar>
 
             <span className="profile-copy">
               <small>{getRoleName(session.role)}</small>
-
               <strong>{session.userName}</strong>
             </span>
 
@@ -221,8 +334,9 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
           >
             <DropdownMenuGroup>
               <DropdownMenuLabel>
-                <span className="dropdown-user-name">{session.userName}</span>
-
+                <span className="dropdown-user-name">
+                  {session.userName}
+                </span>
                 <span className="dropdown-user-role">
                   {getRoleName(session.role)}
                   {" · "}
@@ -235,14 +349,18 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
 
             <DropdownMenuGroup>
               <DropdownMenuItem
-                onClick={() => router.push("/dashboard/perfil")}
+                onClick={() =>
+                  router.push("/dashboard/perfil")
+                }
               >
                 <UserRound />
                 Mi perfil
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                onClick={() => router.push("/dashboard/configuracion")}
+                onClick={() =>
+                  router.push("/dashboard/configuracion")
+                }
               >
                 <Settings />
                 Configuración
@@ -251,7 +369,10 @@ export function AppHeader({ onOpenMobileMenu }: AppHeaderProps) {
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem variant="destructive" onClick={logout}>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={logout}
+            >
               <LogOut />
               Cerrar sesión
             </DropdownMenuItem>
