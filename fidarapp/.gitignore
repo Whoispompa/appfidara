@@ -53,3 +53,8 @@ publish/
 # Logs
 *.log
 logs/
+
+# Variables locales y secretos
+.env
+.env.local
+.env.*.local
