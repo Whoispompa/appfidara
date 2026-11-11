@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Fidara | Lealtad que se siente",
-  description: "Administra tu programa de lealtad, clientes y recompensas desde Fidara.",
+  description:
+    "Administra tu programa de lealtad, clientes y recompensas desde Fidara.",
 };
 
 export default function RootLayout({
@@ -17,7 +19,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body>
+        {children} 
+        <Toaster />
+      </body>
     </html>
   );
 }

@@ -60,7 +60,7 @@ const navigation = [
     icon: UserRoundCog,
   },
   {
-    label: "Ubicaciones",
+    label: "Sucursales",
     href: "/dashboard/ubicaciones",
     icon: MapPin,
   },

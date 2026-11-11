@@ -1,4 +1,7 @@
 "use client";
+import {
+  formatShortDateTime,
+} from "@/components/lib/date-time";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,6 +17,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import GooglePlacePicker from
   "@/components/locations/google-place-picker";
+  
 
 type RecentTransaction = {
   id: string;
@@ -44,14 +48,6 @@ type DashboardSummary = {
   recentTransactions: RecentTransaction[];
 };
 
-function formatMovementDate(value: string) {
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -253,7 +249,11 @@ export default function DashboardPage() {
                         {movement.balanceAfter}
                       </strong>
 
-                      <time>{formatMovementDate(movement.createdAtUtc)}</time>
+                      <time dateTime={movement.createdAtUtc}>
+  {formatShortDateTime(
+    movement.createdAtUtc,
+  )}
+</time>
                     </div>
                   </div>
                 );

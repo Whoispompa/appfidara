@@ -1,35 +1,46 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-const apiUrl =
+export const dynamic = "force-dynamic";
+
+const apiUrl = (
   process.env.FIDARA_API_URL ??
-  "https://api.fidara.mx";
+  "https://api.fidara.mx"
+).replace(/\/+$/, "");
 
 export async function POST(
   request: NextRequest,
 ) {
-  const cookieStore = await cookies();
-
-  const token =
-    cookieStore.get("fidara_token")?.value;
-
-  if (!token) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Tu sesión ha expirado.",
-      },
-      {
-        status: 401,
-      },
-    );
-  }
-
-  const body = await request.json();
-
   try {
+    const cookieStore = await cookies();
+
+    const token =
+      cookieStore.get("fidara_token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Tu sesión ha expirado.",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+
+    const body = await request.json();
+
+    const upstreamUrl =
+      `${apiUrl}/api/wallet/cards/lookup`;
+
+    console.log(
+      "[wallet/lookup] API destino:",
+      upstreamUrl,
+    );
+
     const upstream = await fetch(
-      `${apiUrl}/api/wallet/cards/lookup`,
+      upstreamUrl,
       {
         method: "POST",
 
@@ -43,18 +54,67 @@ export async function POST(
       },
     );
 
-    const payload = await upstream
-      .json()
-      .catch(() => ({
+    const rawResponse = await upstream.text();
+
+    let payload: {
+      success?: boolean;
+      message?: string;
+      [key: string]: unknown;
+    };
+
+    try {
+      payload = rawResponse
+        ? JSON.parse(rawResponse)
+        : {
+            success: false,
+            message:
+              "La API respondió sin contenido.",
+          };
+    } catch {
+      console.error(
+        "[wallet/lookup] Respuesta no válida:",
+        {
+          url: upstreamUrl,
+          status: upstream.status,
+          statusText: upstream.statusText,
+          response: rawResponse,
+        },
+      );
+
+      payload = {
         success: false,
         message:
-          "La API no respondió correctamente.",
-      }));
+          `La API respondió con el código ${upstream.status}.`,
+      };
+    }
 
-    return NextResponse.json(payload, {
-      status: upstream.status,
-    });
-  } catch {
+    if (!upstream.ok) {
+      console.error(
+        "[wallet/lookup] Error de la API:",
+        {
+          url: upstreamUrl,
+          status: upstream.status,
+          payload,
+        },
+      );
+    }
+
+    return NextResponse.json(
+      payload,
+      {
+        status: upstream.status,
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      "[wallet/lookup] Error del proxy:",
+      error,
+    );
+
     return NextResponse.json(
       {
         success: false,

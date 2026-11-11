@@ -1,5 +1,7 @@
 "use client";
-
+import {
+  formatDate,
+} from "@/components/lib/date-time";
 import {
   AlertTriangle,
   Bell,
@@ -15,6 +17,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+import {
+  formatDateTime,
+} from "@/components/lib/date-time";
 
 type Audience = "all" | "location";
 type CampaignStatus =
@@ -83,11 +89,6 @@ function normalizeCampaign(campaign: Campaign): Campaign {
     failedCount: parseCount(campaign.failedCount),
     skippedCount: parseCount(campaign.skippedCount),
   };
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Fecha no disponible" : dateFormatter.format(date);
 }
 
 function StatusBadge({ status }: { status: CampaignStatus }) {
@@ -398,7 +399,7 @@ export default function NotificationsPage() {
             <div className="divide-y divide-[#E5E7EB]">
               {campaigns.map((campaign) => (
                 <article key={campaign.id} className="grid gap-4 px-5 py-5 transition hover:bg-rose-50/30 sm:px-6 lg:grid-cols-[minmax(240px,1.6fr)_minmax(150px,.8fr)_100px_minmax(190px,1fr)] lg:items-center lg:gap-5">
-                  <div className="min-w-0"><strong className="block truncate text-sm font-extrabold">{campaign.title}</strong><p className="mt-1 truncate text-xs text-[#6B7280]">{campaign.message}</p><small className="mt-2 block text-[10px] font-bold text-[#9CA3AF]">{formatDate(campaign.createdAt)}</small></div>
+                  <div className="min-w-0"><strong className="block truncate text-sm font-extrabold">{campaign.title}</strong><p className="mt-1 truncate text-xs text-[#6B7280]">{campaign.message}</p><small className="mt-2 block text-[10px] font-bold text-[#9CA3AF]">{formatDateTime(campaign.createdAt)}</small></div>
                   <div className="flex min-w-0 items-center gap-2 text-xs font-bold text-[#6B7280]">{campaign.audience === "all" ? <Users size={14} className="shrink-0 text-[#E11D48]" /> : <MapPin size={14} className="shrink-0 text-[#E11D48]" />}<span className="truncate">{campaign.audience === "all" ? "Todos los clientes" : campaign.locationName || "Sucursal"}</span></div>
                   <StatusBadge status={campaign.status} />
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><span className="font-extrabold text-emerald-700">{campaign.sentCount} enviadas</span>{campaign.failedCount > 0 && <span className="font-bold text-rose-700">{campaign.failedCount} fallidas</span>}{campaign.skippedCount + campaign.noWalletCount > 0 && <span className="font-bold text-[#6B7280]">{campaign.skippedCount + campaign.noWalletCount} omitidas</span>}</div>

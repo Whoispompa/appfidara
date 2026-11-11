@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  AlertTriangle,
   Building2,
+  ChevronDown,
   Check,
+  CheckCircle2,
   Clock3,
   LoaderCircle,
   MapPin,
@@ -60,6 +63,17 @@ type TeamForm = {
   locationIds: string[];
 };
 
+type StatusConfirmation = {
+  member: TeamMember;
+  nextStatus: boolean;
+} | null;
+
+type ToastMessage = {
+  type: "success" | "error";
+  title: string;
+  message: string;
+} | null;
+
 const emptyForm: TeamForm = {
   firstName: "",
   lastName: "",
@@ -84,9 +98,7 @@ const roleDescriptions: Record<number, string> = {
 };
 
 function formatDate(value?: string | null) {
-  if (!value) {
-    return "Sin actividad";
-  }
+  if (!value) return "Sin actividad";
 
   return new Intl.DateTimeFormat("es-MX", {
     day: "2-digit",
@@ -106,17 +118,22 @@ function getInitials(member: TeamMember) {
 
 export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "inactive"
+  >("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [form, setForm] = useState<TeamForm>(emptyForm);
+  const [statusConfirmation, setStatusConfirmation] =
+    useState<StatusConfirmation>(null);
+  const [toast, setToast] = useState<ToastMessage>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -146,7 +163,7 @@ export default function TeamPage() {
 
       if (!locationsResponse.ok) {
         throw new Error(
-          locationsPayload.message ?? "No fue posible cargar las ubicaciones.",
+          locationsPayload.message ?? "No fue posible cargar las sucursales.",
         );
       }
 
@@ -167,6 +184,24 @@ export default function TeamPage() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!toast) return;
+
+    const timeout = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!formOpen && !statusConfirmation) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [formOpen, statusConfirmation]);
+
   const filteredMembers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -176,13 +211,8 @@ export default function TeamPage() {
         (statusFilter === "active" && member.isActive) ||
         (statusFilter === "inactive" && !member.isActive);
 
-      if (!matchesStatus) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
+      if (!matchesStatus) return false;
+      if (!normalizedSearch) return true;
 
       return [
         member.fullName,
@@ -208,7 +238,7 @@ export default function TeamPage() {
       locationIds: locations.length === 1 ? [locations[0].id] : [],
     });
     setError("");
-    setSuccess("");
+    setToast(null);
     setFormOpen(true);
   }
 
@@ -224,14 +254,12 @@ export default function TeamPage() {
       locationIds: member.locations.map((location) => location.id),
     });
     setError("");
-    setSuccess("");
+    setToast(null);
     setFormOpen(true);
   }
 
   function closeForm() {
-    if (saving) {
-      return;
-    }
+    if (saving) return;
 
     setFormOpen(false);
     setEditing(null);
@@ -240,10 +268,7 @@ export default function TeamPage() {
   }
 
   function updateField<K extends keyof TeamForm>(field: K, value: TeamForm[K]) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm((current) => ({ ...current, [field]: value }));
   }
 
   function toggleLocation(locationId: string) {
@@ -269,33 +294,34 @@ export default function TeamPage() {
     }
 
     if (form.locationIds.length === 0) {
-      setError("Selecciona al menos una ubicación.");
+      setError("Selecciona al menos una sucursal.");
       return;
     }
 
+    const wasEditing = Boolean(editing);
+    const memberName = form.firstName.trim();
+
     setSaving(true);
     setError("");
-    setSuccess("");
+    setToast(null);
 
     try {
       const response = await fetch(
         editing ? `/api/team/${editing.organizationUserId}` : "/api/team",
         {
           method: editing ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             editing
               ? {
-                  firstName: form.firstName.trim(),
+                  firstName: memberName,
                   lastName: form.lastName.trim() || null,
                   phone: form.phone.trim() || null,
                   role: form.role,
                   locationIds: form.locationIds,
                 }
               : {
-                  firstName: form.firstName.trim(),
+                  firstName: memberName,
                   lastName: form.lastName.trim() || null,
                   email: form.email.trim(),
                   phone: form.phone.trim() || null,
@@ -324,12 +350,16 @@ export default function TeamPage() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm);
-      setSuccess(
-        payload.message ??
-          (editing
-            ? "Integrante actualizado correctamente."
-            : "Integrante agregado correctamente."),
-      );
+      setToast({
+        type: "success",
+        title: wasEditing ? "Cambios guardados" : "Integrante agregado",
+        message:
+          payload.message ??
+          (wasEditing
+            ? `${memberName} fue actualizado correctamente.`
+            : `${memberName} ya forma parte de tu equipo.`),
+      });
+
       await loadData();
     } catch (caught) {
       setError(
@@ -344,32 +374,23 @@ export default function TeamPage() {
 
   async function changeStatus(member: TeamMember) {
     const nextStatus = !member.isActive;
-    const action = nextStatus ? "activar" : "desactivar";
-
-    if (!window.confirm(`¿Quieres ${action} el acceso de ${member.fullName}?`)) {
-      return;
-    }
 
     setChangingStatusId(member.organizationUserId);
+    setStatusConfirmation(null);
     setError("");
-    setSuccess("");
 
     try {
       const response = await fetch(
         `/api/team/${member.organizationUserId}/status`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            isActive: nextStatus,
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextStatus }),
           cache: "no-store",
         },
       );
 
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
 
       if (response.status === 401) {
         window.location.assign("/login");
@@ -387,13 +408,23 @@ export default function TeamPage() {
             : item,
         ),
       );
-      setSuccess(payload.message ?? "Acceso actualizado correctamente.");
+
+      setToast({
+        type: "success",
+        title: nextStatus ? "Acceso reactivado" : "Acceso desactivado",
+        message: nextStatus
+          ? `${member.fullName} ya puede volver a operar Fidara.`
+          : `${member.fullName} ya no tiene acceso al panel.`,
+      });
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "No fue posible cambiar el acceso.",
-      );
+      setToast({
+        type: "error",
+        title: "No pudimos completar la operación",
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "Ocurrió un error inesperado.",
+      });
     } finally {
       setChangingStatusId(null);
     }
@@ -405,7 +436,7 @@ export default function TeamPage() {
         <div>
           <span className={styles.eyebrow}>ADMINISTRACIÓN</span>
           <h1>Equipo</h1>
-          <p>Administra quién puede operar Fidara y en qué sucursales.</p>
+          <p>Administra quién puede operar  y en qué sucursales.</p>
         </div>
 
         <button
@@ -419,7 +450,7 @@ export default function TeamPage() {
         </button>
       </section>
 
-      <section className={styles.metrics}>
+      {/* <section className={styles.metrics}>
         <article>
           <span className={`${styles.metricIcon} ${styles.pink}`}>
             <UsersRound size={21} />
@@ -459,7 +490,7 @@ export default function TeamPage() {
             <strong>{locations.length}</strong>
           </div>
         </article>
-      </section>
+      </section> */}
 
       {error && !formOpen && (
         <div className={styles.errorBox}>
@@ -470,18 +501,13 @@ export default function TeamPage() {
         </div>
       )}
 
-      {success && !formOpen && (
-        <div className={styles.successBox}>
-          <Check size={18} />
-          {success}
-        </div>
-      )}
-
       {locations.length === 0 && !loading && (
         <div className={styles.noticeBox}>
           <MapPin size={19} />
-          <span>Necesitas una ubicación activa antes de agregar integrantes.</span>
-          <a href="/dashboard/ubicaciones">Administrar ubicaciones</a>
+          <span>
+            Necesitas una sucursal activa antes de agregar integrantes.
+          </span>
+          <a href="/dashboard/ubicaciones">Administrar sucursales</a>
         </div>
       )}
 
@@ -532,62 +558,86 @@ export default function TeamPage() {
             </h2>
             <p>
               {members.length === 0
-                ? "Asigna roles y sucursales para que tu equipo pueda operar Fidara."
+                ? "Asigna roles y sucursales para que tu equipo pueda operar."
                 : "Prueba con otra búsqueda o cambia el filtro."}
             </p>
           </div>
         ) : (
-          <div className={styles.memberGrid}>
+          <div className={styles.memberList}>
             {filteredMembers.map((member) => {
               const isOwner = member.role === 1;
+              const changing = changingStatusId === member.organizationUserId;
 
               return (
-                <article className={styles.memberCard} key={member.organizationUserId}>
-                  <div className={styles.memberHeader}>
+                <article
+                  className={styles.memberRow}
+                  key={member.organizationUserId}
+                >
+                  <div className={styles.memberPrimary}>
                     <span className={styles.avatar}>{getInitials(member)}</span>
                     <div className={styles.memberIdentity}>
-                      <h2>{member.fullName}</h2>
-                      <span>{member.email}</span>
+                      <div>
+                        <h2>{member.fullName}</h2>
+                        <span
+                          className={
+                            member.isActive
+                              ? styles.activeBadge
+                              : styles.inactiveBadge
+                          }
+                        >
+                          <i />
+                          {member.isActive ? "Activo" : "Inactivo"}
+                        </span>
+                      </div>
+                      <p>{member.email}</p>
+                      {member.phone && <small>{member.phone}</small>}
                     </div>
-                    <span
-                      className={
-                        member.isActive ? styles.activeBadge : styles.inactiveBadge
-                      }
-                    >
-                      <i />
-                      {member.isActive ? "Activo" : "Inactivo"}
-                    </span>
                   </div>
 
-                  <div className={styles.roleRow}>
-                    <span className={styles.roleIcon}>
-                      <ShieldCheck size={17} />
-                    </span>
+                  <div className={styles.memberRole}>
+                    <small>Rol</small>
                     <div>
-                      <small>Rol</small>
-                      <strong>{roleLabels[member.role] ?? member.roleName}</strong>
+                      <span className={styles.roleIcon}>
+                        <ShieldCheck size={16} />
+                      </span>
+                      <strong>
+                        {roleLabels[member.role] ?? member.roleName}
+                      </strong>
                     </div>
                   </div>
 
-                  <div className={styles.locationsBlock}>
+                  <div className={styles.memberLocations}>
                     <small>Sucursales asignadas</small>
                     <div>
                       {isOwner ? (
-                        <span className={styles.locationPill}>Todas las ubicaciones</span>
+                        <span className={styles.locationPill}>
+                          <Building2 size={13} />
+                          Todas las sucursales
+                        </span>
                       ) : member.locations.length > 0 ? (
-                        member.locations.map((location) => (
-                          <span className={styles.locationPill} key={location.id}>
-                            <MapPin size={12} />
-                            {location.name}
-                          </span>
-                        ))
+                        <>
+                          {member.locations.slice(0, 2).map((location) => (
+                            <span
+                              className={styles.locationPill}
+                              key={location.id}
+                            >
+                              <MapPin size={12} />
+                              {location.name}
+                            </span>
+                          ))}
+                          {member.locations.length > 2 && (
+                            <span className={styles.moreLocations}>
+                              +{member.locations.length - 2}
+                            </span>
+                          )}
+                        </>
                       ) : (
-                        <span className={styles.noLocation}>Sin ubicación</span>
+                        <span className={styles.noLocation}>Sin sucursal</span>
                       )}
                     </div>
                   </div>
 
-                  <div className={styles.memberStats}>
+                  <div className={styles.memberActivity}>
                     <div>
                       <Clock3 size={15} />
                       <span>
@@ -595,40 +645,51 @@ export default function TeamPage() {
                         <strong>{formatDate(member.lastLoginAt)}</strong>
                       </span>
                     </div>
-                    <div>
-                      <Check size={15} />
-                      <span>
-                        <small>Operaciones</small>
-                        <strong>{member.transactionsCount}</strong>
-                      </span>
-                    </div>
                   </div>
 
-                  {!isOwner && (
-                    <div className={styles.cardActions}>
-                      <button type="button" onClick={() => openEditForm(member)}>
-                        <Pencil size={16} />
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className={
-                          member.isActive
-                            ? styles.deactivateButton
-                            : styles.activateButton
-                        }
-                        disabled={changingStatusId === member.organizationUserId}
-                        onClick={() => void changeStatus(member)}
-                      >
-                        {changingStatusId === member.organizationUserId ? (
-                          <LoaderCircle className={styles.spinner} size={16} />
-                        ) : (
-                          <Power size={16} />
-                        )}
-                        {member.isActive ? "Desactivar" : "Activar"}
-                      </button>
-                    </div>
-                  )}
+                  <div className={styles.rowActions}>
+                    {isOwner ? (
+                      <span className={styles.ownerNotice}>
+                        Propietario principal
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.editButton}
+                          onClick={() => openEditForm(member)}
+                        >
+                          <Pencil size={16} />
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className={
+                            member.isActive
+                              ? styles.deactivateButton
+                              : styles.activateButton
+                          }
+                          disabled={changing}
+                          onClick={() =>
+                            setStatusConfirmation({
+                              member,
+                              nextStatus: !member.isActive,
+                            })
+                          }
+                        >
+                          {changing ? (
+                            <LoaderCircle
+                              className={styles.spinner}
+                              size={16}
+                            />
+                          ) : (
+                            <Power size={16} />
+                          )}
+                          {member.isActive ? "Desactivar" : "Activar"}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -637,7 +698,11 @@ export default function TeamPage() {
       </section>
 
       {formOpen && (
-        <div className={styles.modalBackdrop} role="presentation" onMouseDown={closeForm}>
+        <div
+          className={styles.modalBackdrop}
+          role="presentation"
+          onMouseDown={closeForm}
+        >
           <section
             className={styles.modal}
             role="dialog"
@@ -669,7 +734,9 @@ export default function TeamPage() {
                     required
                     autoFocus
                     value={form.firstName}
-                    onChange={(event) => updateField("firstName", event.target.value)}
+                    onChange={(event) =>
+                      updateField("firstName", event.target.value)
+                    }
                   />
                 </label>
 
@@ -677,7 +744,9 @@ export default function TeamPage() {
                   <span>Apellido</span>
                   <input
                     value={form.lastName}
-                    onChange={(event) => updateField("lastName", event.target.value)}
+                    onChange={(event) =>
+                      updateField("lastName", event.target.value)
+                    }
                   />
                 </label>
 
@@ -688,7 +757,9 @@ export default function TeamPage() {
                     type="email"
                     value={form.email}
                     disabled={Boolean(editing)}
-                    onChange={(event) => updateField("email", event.target.value)}
+                    onChange={(event) =>
+                      updateField("email", event.target.value)
+                    }
                   />
                 </label>
 
@@ -696,21 +767,78 @@ export default function TeamPage() {
                   <span>Teléfono</span>
                   <input
                     value={form.phone}
-                    onChange={(event) => updateField("phone", event.target.value)}
+                    onChange={(event) =>
+                      updateField("phone", event.target.value)
+                    }
                   />
                 </label>
 
-                <label>
-                  <span>Rol *</span>
-                  <select
-                    value={form.role}
-                    onChange={(event) => updateField("role", Number(event.target.value))}
-                  >
-                    <option value={4}>Empleado</option>
-                    <option value={3}>Encargado</option>
-                    <option value={2}>Administrador</option>
-                  </select>
-                </label>
+
+<div className={styles.roleField}>
+  <span className={styles.fieldLabel}>Rol *</span>
+
+  <div
+    className={styles.customSelect}
+    onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+        setRoleMenuOpen(false);
+      }
+    }}
+  >
+    <button
+      type="button"
+      className={`${styles.selectTrigger} ${
+        roleMenuOpen ? styles.selectTriggerOpen : ""
+      }`}
+      aria-haspopup="listbox"
+      aria-expanded={roleMenuOpen}
+      onClick={() => setRoleMenuOpen((current) => !current)}
+    >
+      <span>{roleLabels[form.role]}</span>
+
+      <ChevronDown
+        size={17}
+        className={roleMenuOpen ? styles.chevronOpen : ""}
+      />
+    </button>
+
+    {roleMenuOpen && (
+      <div
+        className={styles.selectMenu}
+        role="listbox"
+        aria-label="Seleccionar rol"
+      >
+        {[
+          { value: 4, label: "Empleado" },
+          { value: 3, label: "Encargado" },
+          { value: 2, label: "Administrador" },
+        ].map((role) => {
+          const selected = form.role === role.value;
+
+          return (
+            <button
+              key={role.value}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              className={`${styles.selectOption} ${
+                selected ? styles.selectedOption : ""
+              }`}
+              onClick={() => {
+                updateField("role", role.value);
+                setRoleMenuOpen(false);
+              }}
+            >
+              <span>{role.label}</span>
+
+              {selected && <Check size={16} />}
+            </button>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
 
                 {!editing && (
                   <label className={styles.fullField}>
@@ -721,7 +849,9 @@ export default function TeamPage() {
                       minLength={8}
                       value={form.password}
                       placeholder="Mínimo 8 caracteres"
-                      onChange={(event) => updateField("password", event.target.value)}
+                      onChange={(event) =>
+                        updateField("password", event.target.value)
+                      }
                     />
                   </label>
                 )}
@@ -755,7 +885,11 @@ export default function TeamPage() {
                         <span>
                           <strong>{location.name}</strong>
                           <small>
-                            {[location.addressLine1, location.city, location.state]
+                            {[
+                              location.addressLine1,
+                              location.city,
+                              location.state,
+                            ]
                               .filter(Boolean)
                               .join(", ") || "Ubicación activa"}
                           </small>
@@ -767,16 +901,130 @@ export default function TeamPage() {
               </fieldset>
 
               <div className={styles.modalActions}>
-                <button type="button" className={styles.cancelButton} onClick={closeForm}>
+                <button
+                  type="button"
+                  className={styles.cancelButton}
+                  onClick={closeForm}
+                >
                   Cancelar
                 </button>
-                <button type="submit" className={styles.saveButton} disabled={saving}>
-                  {saving && <LoaderCircle className={styles.spinner} size={17} />}
+                <button
+                  type="submit"
+                  className={styles.saveButton}
+                  disabled={saving}
+                >
+                  {saving && (
+                    <LoaderCircle className={styles.spinner} size={17} />
+                  )}
                   {editing ? "Guardar cambios" : "Agregar integrante"}
                 </button>
               </div>
             </form>
           </section>
+        </div>
+      )}
+
+      {statusConfirmation && (
+        <div
+          className={styles.confirmBackdrop}
+          role="presentation"
+          onMouseDown={() => setStatusConfirmation(null)}
+        >
+          <section
+            className={styles.confirmDialog}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="team-status-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.confirmHeading}>
+              <span
+                className={
+                  statusConfirmation.nextStatus
+                    ? styles.confirmIconSuccess
+                    : styles.confirmIconDanger
+                }
+              >
+                {statusConfirmation.nextStatus ? (
+                  <Power size={22} />
+                ) : (
+                  <AlertTriangle size={22} />
+                )}
+              </span>
+              <h2 id="team-status-dialog-title">
+                {statusConfirmation.nextStatus
+                  ? "¿Reactivar integrante?"
+                  : "¿Desactivar integrante?"}
+              </h2>
+              <button
+                type="button"
+                className={styles.confirmClose}
+                onClick={() => setStatusConfirmation(null)}
+                aria-label="Cerrar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p>
+              {statusConfirmation.nextStatus
+                ? `${statusConfirmation.member.fullName} volverá a tener acceso al panel y a sus sucursales asignadas.`
+                : `${statusConfirmation.member.fullName} perderá el acceso al panel, pero conservará su historial.`}
+            </p>
+
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setStatusConfirmation(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={
+                  statusConfirmation.nextStatus
+                    ? styles.confirmSuccessButton
+                    : styles.confirmDangerButton
+                }
+                onClick={() => void changeStatus(statusConfirmation.member)}
+              >
+                <Power size={17} />
+                {statusConfirmation.nextStatus
+                  ? "Sí, reactivar"
+                  : "Sí, desactivar"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`${styles.toast} ${
+            toast.type === "success" ? styles.toastSuccess : styles.toastError
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={styles.toastIcon}>
+            {toast.type === "success" ? (
+              <CheckCircle2 size={19} />
+            ) : (
+              <AlertTriangle size={19} />
+            )}
+          </span>
+          <div>
+            <strong>{toast.title}</strong>
+            <p>{toast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="Cerrar notificación"
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
     </main>

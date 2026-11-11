@@ -79,7 +79,7 @@ export default function RegisterPage() {
               <input
                 id="firstName"
                 autoComplete="given-name"
-                placeholder="Yaira"
+                placeholder="Tu nombre"
                 value={form.firstName}
                 onChange={update("firstName")}
                 required
@@ -90,7 +90,7 @@ export default function RegisterPage() {
               <input
                 id="lastName"
                 autoComplete="family-name"
-                placeholder="García"
+                placeholder="Tu apellido"
                 value={form.lastName}
                 onChange={update("lastName")}
                 required
@@ -102,7 +102,7 @@ export default function RegisterPage() {
             <input
               id="businessName"
               autoComplete="organization"
-              placeholder="Café Nómada"
+              placeholder="Nombre de tu Negocio"
               value={form.businessName}
               onChange={update("businessName")}
               required

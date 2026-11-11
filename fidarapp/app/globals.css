@@ -6165,3 +6165,75 @@ body {
     flex-direction: column;
   }
 }
+
+.purchase-field {
+  display: block;
+  margin: 0 28px 20px;
+}
+
+.purchase-field > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.purchase-field > div {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  border: 1px solid #ded8d2;
+  border-radius: 14px;
+  background: #fff;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.purchase-field > div:focus-within {
+  border-color: #e11d48;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.1);
+}
+
+.purchase-field strong {
+  color: #111827;
+  font-size: 18px;
+}
+
+.purchase-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.purchase-field input::placeholder {
+  color: #9ca3af;
+}
+
+.purchase-field small {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.purchase-field p {
+  margin: 7px 2px 0;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+@media (max-width: 680px) {
+  .purchase-field {
+    margin-inline: 18px;
+  }
+}

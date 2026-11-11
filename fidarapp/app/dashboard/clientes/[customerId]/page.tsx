@@ -1,11 +1,14 @@
 "use client";
 
+import { formatDateOnly, formatDateTime } from "@/components/lib/date-time";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarDays,
   Check,
+  CheckCircle2,
   Copy,
   CreditCard,
   ExternalLink,
@@ -23,6 +26,8 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
+
+import styles from "./customer-detail.module.css";
 
 type CustomerCard = {
   id: string;
@@ -71,21 +76,14 @@ type CustomerResponse = {
   data: CustomerDetail;
 };
 
+type ToastMessage = {
+  type: "success" | "error";
+  title: string;
+  message: string;
+} | null;
+
 const getAppUrl =
   process.env.NEXT_PUBLIC_GET_APP_URL ?? "https://get.fidara.mx";
-
-function formatDate(value?: string | null, includeTime = false) {
-  if (!value) return "Sin actividad";
-
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    ...(includeTime
-      ? { hour: "2-digit", minute: "2-digit" }
-      : {}),
-  }).format(new Date(value));
-}
 
 function getInitials(customer: CustomerDetail) {
   const first = customer.firstName?.trim().charAt(0) ?? "";
@@ -103,9 +101,11 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusConfirmationOpen, setStatusConfirmationOpen] = useState(false);
   const [copiedCardId, setCopiedCardId] = useState<string | null>(null);
   const [recoveryCard, setRecoveryCard] = useState<CustomerCard | null>(null);
   const [recoveryLinkCopied, setRecoveryLinkCopied] = useState(false);
+  const [toast, setToast] = useState<ToastMessage>(null);
 
   const recoveryUrl = recoveryCard?.qrToken
     ? `${getAppUrl}/card/${encodeURIComponent(recoveryCard.qrToken)}`
@@ -121,6 +121,7 @@ export default function CustomerDetailPage() {
       const response = await fetch(`/api/customers/${customerId}`, {
         cache: "no-store",
       });
+
       const payload = (await response.json()) as CustomerResponse;
 
       if (response.status === 401) {
@@ -154,41 +155,62 @@ export default function CustomerDetailPage() {
   }, [loadCustomer]);
 
   useEffect(() => {
-    if (!recoveryCard) return;
+    if (!toast) return;
+
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 3200);
+
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!recoveryCard && !statusConfirmationOpen) return;
 
     function closeWithEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") closeRecoveryModal();
+      if (event.key !== "Escape") return;
+
+      if (recoveryCard) {
+        setRecoveryCard(null);
+        setRecoveryLinkCopied(false);
+      }
+
+      if (statusConfirmationOpen) {
+        setStatusConfirmationOpen(false);
+      }
     }
 
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeWithEscape);
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeWithEscape);
     };
-  }, [recoveryCard]);
+  }, [recoveryCard, statusConfirmationOpen]);
 
   async function updateStatus() {
     if (!customer) return;
 
-    if (
-      customer.isActive &&
-      !window.confirm(`¿Deseas desactivar a ${customer.fullName}?`)
-    ) {
-      return;
-    }
+    const nextStatus = !customer.isActive;
 
     setUpdatingStatus(true);
+    setStatusConfirmationOpen(false);
     setError("");
 
     try {
       const response = await fetch(`/api/customers/${customer.id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !customer.isActive }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isActive: nextStatus,
+        }),
       });
-      const payload = await response.json();
+
+      const payload = await response.json().catch(() => ({}));
 
       if (response.status === 401) {
         router.replace("/login");
@@ -196,18 +218,36 @@ export default function CustomerDetailPage() {
       }
 
       if (!response.ok) {
-        throw new Error(payload.message ?? "No fue posible actualizar al cliente.");
+        throw new Error(
+          payload.message ?? "No fue posible actualizar al cliente.",
+        );
       }
 
       setCustomer((current) =>
-        current ? { ...current, isActive: !current.isActive } : current,
+        current
+          ? {
+              ...current,
+              isActive: nextStatus,
+            }
+          : current,
       );
+
+      setToast({
+        type: "success",
+        title: nextStatus ? "Cliente reactivado" : "Cliente desactivado",
+        message: nextStatus
+          ? `${customer.fullName} vuelve a estar activo.`
+          : `${customer.fullName} fue desactivado correctamente.`,
+      });
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "No fue posible actualizar al cliente.",
-      );
+      setToast({
+        type: "error",
+        title: "No pudimos actualizar al cliente",
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "Ocurrió un error inesperado.",
+      });
     } finally {
       setUpdatingStatus(false);
     }
@@ -217,17 +257,27 @@ export default function CustomerDetailPage() {
     try {
       await navigator.clipboard.writeText(card.cardNumber);
       setCopiedCardId(card.id);
-      window.setTimeout(() => setCopiedCardId(null), 1800);
+
+      window.setTimeout(() => {
+        setCopiedCardId(null);
+      }, 1800);
     } catch {
-      setError("No fue posible copiar el número de tarjeta.");
+      setToast({
+        type: "error",
+        title: "No se pudo copiar",
+        message: "No fue posible copiar el número de tarjeta.",
+      });
     }
   }
 
   function openRecoveryModal(card: CustomerCard) {
     if (!card.qrToken) {
-      setError(
-        "Esta tarjeta todavía no tiene disponible su enlace de recuperación.",
-      );
+      setToast({
+        type: "error",
+        title: "Recuperación no disponible",
+        message:
+          "Esta tarjeta todavía no tiene disponible su enlace de recuperación.",
+      });
       return;
     }
 
@@ -246,24 +296,31 @@ export default function CustomerDetailPage() {
     try {
       await navigator.clipboard.writeText(recoveryUrl);
       setRecoveryLinkCopied(true);
-      window.setTimeout(() => setRecoveryLinkCopied(false), 1800);
+
+      window.setTimeout(() => {
+        setRecoveryLinkCopied(false);
+      }, 1800);
     } catch {
-      setError("No fue posible copiar el enlace de recuperación.");
+      setToast({
+        type: "error",
+        title: "No se pudo copiar",
+        message: "No fue posible copiar el enlace de recuperación.",
+      });
     }
   }
 
   if (loading) {
     return (
-      <div className="customer-detail-loading">
-        <LoaderCircle className="scanner-spinner" size={31} />
-        <span>Cargando información del cliente...</span>
+      <div className={styles.loadingState}>
+        <LoaderCircle className={styles.spinner} size={31} />
+        <span>Cargando información del cliente…</span>
       </div>
     );
   }
 
   if (!customer) {
     return (
-      <div className="customer-detail-loading">
+      <div className={styles.loadingState}>
         <UserRound size={31} />
         <h2>No encontramos al cliente</h2>
         <Link href="/dashboard/clientes">Volver a clientes</Link>
@@ -272,108 +329,159 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <>
-      <div className="customer-detail-back">
-        <Link href="/dashboard/clientes">
-          <ArrowLeft size={17} />
-          Volver a clientes
-        </Link>
-      </div>
+    <main className={styles.page}>
+      <Link href="/dashboard/clientes" className={styles.backLink}>
+        <ArrowLeft size={17} />
+        Volver a clientes
+      </Link>
 
-      <section className="customer-profile-heading">
-        <div className="customer-profile-main">
-          <span className="customer-profile-avatar">{getInitials(customer)}</span>
+      <section className={styles.profileHeader}>
+        <div className={styles.profileMain}>
+          <span className={styles.profileAvatar}>{getInitials(customer)}</span>
 
-          <div>
-            <span className="page-eyebrow">Perfil del cliente</span>
+          <div className={styles.profileIdentity}>
+            <span className={styles.eyebrow}>PERFIL DEL CLIENTE</span>
 
-            <div className="customer-name-line">
+            <div className={styles.customerName}>
               <h1>{customer.fullName}</h1>
+
               <span
-                className={`customer-status ${
-                  customer.isActive ? "active" : "inactive"
-                }`}
+                className={
+                  customer.isActive ? styles.activeBadge : styles.inactiveBadge
+                }
               >
+                <i />
                 {customer.isActive ? "Activo" : "Inactivo"}
               </span>
             </div>
 
-            <p>Cliente desde {formatDate(customer.createdAt)}</p>
+            <p>
+              Cliente desde{" "}
+              {formatDateOnly(customer.createdAt, {}, "Sin fecha")}
+            </p>
           </div>
         </div>
 
-        <div className="customer-heading-actions">
+        <div className={styles.headingActions}>
           <button
             type="button"
             className={
               customer.isActive
-                ? "customer-deactivate-button"
-                : "customer-activate-button"
+                ? styles.deactivateButton
+                : styles.activateButton
             }
             disabled={updatingStatus}
-            onClick={() => void updateStatus()}
+            onClick={() => setStatusConfirmationOpen(true)}
           >
             {updatingStatus ? (
-              <LoaderCircle className="scanner-spinner" size={18} />
+              <LoaderCircle className={styles.spinner} size={18} />
             ) : customer.isActive ? (
-              "Desactivar cliente"
+              <>
+                <X size={17} />
+                Desactivar cliente
+              </>
             ) : (
               <>
-                <Check size={18} />
+                <Check size={17} />
                 Activar cliente
               </>
             )}
           </button>
 
-          <Link href="/dashboard/escanear" className="primary-action">
+          <button
+            type="button"
+            className={styles.primaryButton}
+            disabled={customer.cards.length === 0}
+            onClick={() => {
+              const cardToRecover =
+                customer.cards.find((card) => card.status === 1) ??
+                customer.cards[0];
+
+              if (cardToRecover) {
+                openRecoveryModal(cardToRecover);
+              }
+            }}
+          >
             <QrCode size={19} />
-            Escanear tarjeta
-          </Link>
+            Recuperar tarjeta
+          </button>
         </div>
       </section>
 
       {error && (
-        <div className="dashboard-error error-box">
+        <div className={styles.errorBox}>
           <span>{error}</span>
+
           <button type="button" onClick={() => void loadCustomer()}>
             Intentar nuevamente
           </button>
         </div>
       )}
 
-      <section className="customer-detail-metrics">
+      <section className={styles.metrics}>
         <article>
-          <span className="coral"><CreditCard size={21} /></span>
-          <div><small>Tarjetas activas</small><strong>{customer.summary.activeCardCount}</strong></div>
+          <span className={`${styles.metricIcon} ${styles.coral}`}>
+            <CreditCard size={21} />
+          </span>
+
+          <div>
+            <small>Tarjetas activas</small>
+            <strong>{customer.summary.activeCardCount}</strong>
+          </div>
         </article>
+
         <article>
-          <span className="mint"><Stamp size={21} /></span>
-          <div><small>Saldo disponible</small><strong>{customer.summary.totalBalance}</strong></div>
+          <span className={`${styles.metricIcon} ${styles.mint}`}>
+            <Stamp size={21} />
+          </span>
+
+          <div>
+            <small>Saldo disponible</small>
+            <strong>{customer.summary.totalBalance}</strong>
+          </div>
         </article>
+
         <article>
-          <span className="lilac"><WalletCards size={21} /></span>
-          <div><small>Sellos acumulados</small><strong>{customer.summary.lifetimeEarned}</strong></div>
+          <span className={`${styles.metricIcon} ${styles.lilac}`}>
+            <WalletCards size={21} />
+          </span>
+
+          <div>
+            <small>Sellos acumulados</small>
+            <strong>{customer.summary.lifetimeEarned}</strong>
+          </div>
         </article>
+
         <article>
-          <span className="sun"><Gift size={21} /></span>
-          <div><small>Sellos canjeados</small><strong>{customer.summary.lifetimeRedeemed}</strong></div>
+          <span className={`${styles.metricIcon} ${styles.sun}`}>
+            <Gift size={21} />
+          </span>
+
+          <div>
+            <small>Sellos canjeados</small>
+            <strong>{customer.summary.lifetimeRedeemed}</strong>
+          </div>
         </article>
       </section>
 
-      <section className="customer-detail-layout">
-        <aside className="customer-information-card">
-          <div className="customer-card-heading">
+      <section className={styles.detailLayout}>
+        <aside className={styles.informationCard}>
+          <div className={styles.sectionHeading}>
             <div>
-              <span className="page-eyebrow">Información</span>
+              <span className={styles.eyebrow}>INFORMACIÓN</span>
               <h2>Datos del cliente</h2>
             </div>
           </div>
 
-          <div className="customer-information-list">
+          <div className={styles.informationList}>
             <div>
-              <span><Mail size={18} /></span>
+              <span className={styles.infoIcon}>
+                <Mail size={18} />
+              </span>
+
               <section>
                 <small>Correo electrónico</small>
+
                 {customer.email ? (
                   <a href={`mailto:${customer.email}`}>{customer.email}</a>
                 ) : (
@@ -383,9 +491,13 @@ export default function CustomerDetailPage() {
             </div>
 
             <div>
-              <span><Phone size={18} /></span>
+              <span className={styles.infoIcon}>
+                <Phone size={18} />
+              </span>
+
               <section>
                 <small>Teléfono</small>
+
                 {customer.phone ? (
                   <a href={`tel:${customer.phone}`}>{customer.phone}</a>
                 ) : (
@@ -395,21 +507,27 @@ export default function CustomerDetailPage() {
             </div>
 
             <div>
-              <span><CalendarDays size={18} /></span>
+              <span className={styles.infoIcon}>
+                <CalendarDays size={18} />
+              </span>
+
               <section>
                 <small>Fecha de nacimiento</small>
+
                 <strong>
-                  {customer.birthDate
-                    ? formatDate(customer.birthDate)
-                    : "No registrada"}
+                  {formatDateOnly(customer.birthDate, {}, "No registrada")}
                 </strong>
               </section>
             </div>
 
             <div>
-              <span><Megaphone size={18} /></span>
+              <span className={styles.infoIcon}>
+                <Megaphone size={18} />
+              </span>
+
               <section>
                 <small>Comunicaciones comerciales</small>
+
                 <strong>
                   {customer.marketingConsent
                     ? "Consentimiento otorgado"
@@ -419,152 +537,302 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          <div className="customer-last-activity">
+          <div className={styles.lastVisit}>
             <small>Última visita</small>
-            <strong>{formatDate(customer.lastVisitAt, true)}</strong>
+
+            <strong>
+              {formatDateTime(customer.lastVisitAt, {}, "Sin visitas")}
+            </strong>
           </div>
         </aside>
 
-        <main className="customer-cards-panel">
-          <div className="customer-card-heading">
+        <section className={styles.cardsPanel}>
+          <div className={styles.sectionHeading}>
             <div>
-              <span className="page-eyebrow">Programas</span>
+              <span className={styles.eyebrow}>PROGRAMAS</span>
               <h2>Tarjetas de lealtad</h2>
             </div>
-            <span className="customer-card-count">{customer.cards.length}</span>
+
+            <span className={styles.cardCount}>{customer.cards.length}</span>
           </div>
 
           {customer.cards.length === 0 ? (
-            <div className="customer-cards-empty">
+            <div className={styles.cardsEmpty}>
               <CreditCard size={28} />
+
               <h3>El cliente no tiene tarjetas</h3>
-              <p>Cuando se inscriba en un programa, su tarjeta aparecerá aquí.</p>
+
+              <p>
+                Cuando se inscriba en un programa, su tarjeta aparecerá aquí.
+              </p>
             </div>
           ) : (
-            <div className="customer-loyalty-cards">
+            <div className={styles.loyaltyCards}>
               {customer.cards.map((card) => (
-                <article className="customer-loyalty-card" key={card.id}>
-                  <div className="customer-loyalty-header">
-                    <div>
-                      <span className="customer-card-icon"><CreditCard size={20} /></span>
+                <article className={styles.loyaltyCard} key={card.id}>
+                  <div className={styles.loyaltyHeader}>
+                    <div className={styles.programIdentity}>
+                      <span className={styles.cardIcon}>
+                        <CreditCard size={20} />
+                      </span>
+
                       <div>
                         <h3>{card.programName}</h3>
-                        <button type="button" onClick={() => void copyCardNumber(card)}>
+
+                        <button
+                          type="button"
+                          onClick={() => void copyCardNumber(card)}
+                        >
                           {card.cardNumber}
-                          {copiedCardId === card.id ? <Check size={14} /> : <Copy size={14} />}
+
+                          {copiedCardId === card.id ? (
+                            <Check size={14} />
+                          ) : (
+                            <Copy size={14} />
+                          )}
                         </button>
                       </div>
                     </div>
 
                     <span
-                      className={`customer-status ${
-                        card.status === 1 ? "active" : "inactive"
-                      }`}
+                      className={
+                        card.status === 1
+                          ? styles.activeBadge
+                          : styles.inactiveBadge
+                      }
                     >
+                      <i />
                       {card.status === 1 ? "Activa" : "Inactiva"}
                     </span>
                   </div>
 
-                  <div className="customer-loyalty-balance">
-                    <div>
+                  <div className={styles.cardHighlights}>
+                    <div className={styles.balanceHighlight}>
                       <small>Saldo disponible</small>
                       <strong>{card.balance}</strong>
                       <span>sellos</span>
                     </div>
+
                     <div>
-                      <small>Instalada en Wallet</small>
-                      <strong>{card.walletPassCount > 0 ? "Sí" : "No"}</strong>
+                      <small>Wallet</small>
+                      <strong>
+                        {card.walletPassCount > 0
+                          ? "Instalada"
+                          : "No instalada"}
+                      </strong>
                       <span>
-                        {card.walletPassCount} {card.walletPassCount === 1 ? "pase" : "pases"}
+                        {card.walletPassCount}{" "}
+                        {card.walletPassCount === 1 ? "pase" : "pases"}
                       </span>
+                    </div>
+
+                    <div>
+                      <small>Acumulados</small>
+                      <strong>{card.lifetimeEarned}</strong>
+                      <span>sellos históricos</span>
+                    </div>
+
+                    <div>
+                      <small>Canjeados</small>
+                      <strong>{card.lifetimeRedeemed}</strong>
+                      <span>sellos utilizados</span>
                     </div>
                   </div>
 
-                  <div className="customer-loyalty-stats">
-                    <div><span>Acumulados</span><strong>{card.lifetimeEarned}</strong></div>
-                    <div><span>Canjeados</span><strong>{card.lifetimeRedeemed}</strong></div>
-                    <div><span>Movimientos</span><strong>{card.transactionCount}</strong></div>
-                  </div>
+                  <div className={styles.loyaltyFooter}>
+                    <div>
+                      <small>Última actividad</small>
 
-                  <div className="customer-loyalty-footer">
-                    <span>Última actividad: {formatDate(card.lastActivityAt, true)}</span>
+                      <strong>
+                        {formatDateTime(
+                          card.lastActivityAt,
+                          {},
+                          "Sin actividad",
+                        )}
+                      </strong>
 
-                    <div className="customer-loyalty-actions">
-                      <button type="button" onClick={() => openRecoveryModal(card)}>
+                      <span className={styles.transactionCount}>
+                        {card.transactionCount}{" "}
+                        {card.transactionCount === 1
+                          ? "movimiento"
+                          : "movimientos"}
+                      </span>
+                    </div>
+
+                    {/* <div className={styles.cardActions}>
+                      <button
+                        type="button"
+                        onClick={() => openRecoveryModal(card)}
+                      >
                         <QrCode size={15} />
                         Recuperar tarjeta
                       </button>
 
                       <Link href="/dashboard/escanear">
-                        Agregar sello
                         <Stamp size={15} />
+                        Agregar sello
                       </Link>
-                    </div>
+                    </div> */}
                   </div>
                 </article>
               ))}
             </div>
           )}
-        </main>
+        </section>
       </section>
+
+      {statusConfirmationOpen && (
+        <div
+          className={styles.modalBackdrop}
+          role="presentation"
+          onMouseDown={() => setStatusConfirmationOpen(false)}
+        >
+          <section
+            className={styles.confirmDialog}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="customer-status-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.confirmHeading}>
+              <span
+                className={
+                  customer.isActive
+                    ? styles.confirmIconDanger
+                    : styles.confirmIconSuccess
+                }
+              >
+                {customer.isActive ? (
+                  <AlertTriangle size={22} />
+                ) : (
+                  <Check size={22} />
+                )}
+              </span>
+
+              <h2 id="customer-status-dialog-title">
+                {customer.isActive
+                  ? "¿Desactivar cliente?"
+                  : "¿Reactivar cliente?"}
+              </h2>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setStatusConfirmationOpen(false)}
+                aria-label="Cerrar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p>
+              {customer.isActive
+                ? `${customer.fullName} será desactivado, pero conservará sus tarjetas y su historial.`
+                : `${customer.fullName} volverá a aparecer como cliente activo.`}
+            </p>
+
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setStatusConfirmationOpen(false)}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={
+                  customer.isActive
+                    ? styles.confirmDangerButton
+                    : styles.confirmSuccessButton
+                }
+                onClick={() => void updateStatus()}
+              >
+                {customer.isActive ? <X size={17} /> : <Check size={17} />}
+
+                {customer.isActive ? "Sí, desactivar" : "Sí, reactivar"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {recoveryCard && recoveryUrl && (
         <div
-          className="recovery-modal-backdrop"
+          className={styles.modalBackdrop}
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeRecoveryModal();
+            if (event.target === event.currentTarget) {
+              closeRecoveryModal();
+            }
           }}
         >
           <section
-            className="recovery-modal"
+            className={styles.recoveryModal}
             role="dialog"
             aria-modal="true"
             aria-labelledby="recovery-modal-title"
           >
-            <button
-              type="button"
-              className="recovery-modal-close"
-              onClick={closeRecoveryModal}
-              aria-label="Cerrar"
-            >
-              <X size={19} />
-            </button>
+            <div className={styles.recoveryHeading}>
+              <span className={styles.recoveryIcon}>
+                <QrCode size={21} />
+              </span>
 
-            <span className="page-eyebrow">Recuperar tarjeta</span>
-            <h2 id="recovery-modal-title">{recoveryCard.programName}</h2>
+              <div>
+                <span className={styles.eyebrow}>RECUPERAR TARJETA</span>
+
+                <h2 id="recovery-modal-title">{recoveryCard.programName}</h2>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={closeRecoveryModal}
+                aria-label="Cerrar"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
             <p>
-              El cliente puede escanear este código para instalar nuevamente
-              su misma tarjeta sin perder sellos ni recompensas.
+              El cliente puede escanear este código para instalar nuevamente su
+              misma tarjeta sin perder sellos ni recompensas.
             </p>
 
-            <div className="recovery-modal-qr">
+            <div className={styles.recoveryQr}>
               <QRCodeSVG
                 value={recoveryUrl}
-                size={220}
+                size={210}
                 level="H"
                 marginSize={2}
                 bgColor="#ffffff"
-                fgColor="#111111"
+                fgColor="#111827"
                 title={`Recuperar ${recoveryCard.programName}`}
               />
             </div>
 
-            <div className="recovery-modal-card">
+            <div className={styles.recoverySummary}>
               <span>{recoveryCard.cardNumber}</span>
               <strong>{recoveryCard.balance} sellos</strong>
             </div>
 
-            <div className="recovery-modal-url">
+            <div className={styles.recoveryUrl}>
               <span>{recoveryUrl}</span>
-              <button type="button" onClick={() => void copyRecoveryLink()} aria-label="Copiar enlace">
+
+              <button
+                type="button"
+                onClick={() => void copyRecoveryLink()}
+                aria-label="Copiar enlace"
+              >
                 {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
               </button>
             </div>
 
-            <div className="recovery-modal-actions">
+            <div className={styles.recoveryActions}>
               <button type="button" onClick={() => void copyRecoveryLink()}>
                 {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
+
                 {recoveryLinkCopied ? "Enlace copiado" : "Copiar enlace"}
               </button>
 
@@ -576,6 +844,37 @@ export default function CustomerDetailPage() {
           </section>
         </div>
       )}
-    </>
+
+      {toast && (
+        <div
+          className={`${styles.toast} ${
+            toast.type === "success" ? styles.toastSuccess : styles.toastError
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={styles.toastIcon}>
+            {toast.type === "success" ? (
+              <CheckCircle2 size={19} />
+            ) : (
+              <AlertTriangle size={19} />
+            )}
+          </span>
+
+          <div>
+            <strong>{toast.title}</strong>
+            <p>{toast.message}</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="Cerrar notificación"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+    </main>
   );
 }

@@ -147,7 +147,7 @@ export default function LocationsPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible cargar las ubicaciones.",
+          payload.message ?? "No fue posible cargar las sucursales.",
         );
       }
 
@@ -156,7 +156,7 @@ export default function LocationsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible cargar las ubicaciones.",
+          : "No fue posible cargar las sucursales.",
       );
     } finally {
       setLoading(false);
@@ -412,7 +412,7 @@ export default function LocationsPage() {
           onClick={openCreateForm}
         >
           <Plus size={19} />
-          Nueva ubicación
+          Nueva sucursal
         </button>
       </section>
 
@@ -460,7 +460,7 @@ export default function LocationsPage() {
         {loading ? (
           <div className={styles.loadingState}>
             <LoaderCircle className={styles.spinner} size={28} />
-            <span>Cargando ubicaciones…</span>
+            <span>Cargando sucursales…</span>
           </div>
         ) : filteredLocations.length === 0 ? (
           <div className={styles.emptyState}>
