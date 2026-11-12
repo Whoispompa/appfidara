@@ -6237,3 +6237,218 @@ body {
     margin-inline: 18px;
   }
 }
+
+/* =========================================================
+   PROGRAMAS DE SELLOS Y PUNTOS
+   Agregar al final de app/globals.css
+========================================================= */
+
+.program-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.program-type-grid button {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 17px;
+  border: 1px solid #e4ded9;
+  border-radius: 15px;
+  background: #fff;
+  color: #403a36;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.program-type-grid button:hover:not(:disabled) {
+  border-color: #ef4f59;
+  box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
+}
+
+.program-type-grid button.selected {
+  border-color: #ef4f59;
+  background: #fff6f7;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
+}
+
+.program-type-grid button:disabled {
+  cursor: default;
+}
+
+.program-type-grid button > span {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff0f2;
+  color: #ef4f59;
+}
+
+.program-type-grid strong {
+  color: #171514;
+  font-size: 0.92rem;
+}
+
+.program-type-grid small,
+.program-type-note,
+.field-help {
+  color: #857d77;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.program-type-note {
+  margin: -8px 0 18px;
+}
+
+.settings-fields select,
+.reward-fields select {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 38px 0 13px;
+  border: 1px solid #ddd6d1;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: #171514;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.settings-fields select:focus,
+.reward-fields select:focus {
+  border-color: #ef4f59;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
+}
+
+.money-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.money-field b {
+  position: absolute;
+  left: 13px;
+  z-index: 1;
+  color: #171514;
+}
+
+.money-field b + input {
+  padding-left: 31px;
+}
+
+.money-field small {
+  position: absolute;
+  right: 13px;
+  color: #857d77;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.money-field input {
+  padding-right: 52px;
+}
+
+.wallet-points-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 13px;
+  margin: 24px 0 28px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.wallet-points-icon {
+  display: grid;
+  width: 45px;
+  height: 45px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.wallet-points-copy {
+  min-width: 0;
+}
+
+.wallet-points-copy small,
+.wallet-points-copy span {
+  display: block;
+}
+
+.wallet-points-copy small {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.wallet-points-copy strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.65rem;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.wallet-points-copy span {
+  margin-top: 6px;
+  font-size: 0.68rem;
+  opacity: 0.78;
+}
+
+.wallet-points-progress {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.wallet-points-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms ease;
+}
+
+.wallet-card-preview.compact .wallet-points-preview {
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-copy strong {
+  font-size: 1.05rem;
+}
+
+.wallet-card-preview.compact .wallet-points-copy span {
+  font-size: 0.55rem;
+}
+
+@media (max-width: 680px) {
+  .program-type-grid,
+  .reward-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .full-field {
+    grid-column: auto;
+  }
+}

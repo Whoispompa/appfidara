@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarDays,
-  Camera,
   Check,
+  Coins,
   CreditCard,
   Gift,
+  Hash,
   Keyboard,
   LoaderCircle,
   Mail,
@@ -64,6 +65,10 @@ type CardInformation = {
     id: string;
     name: string;
     description?: string | null;
+    programType?: number;
+    targetValue?: number | null;
+    pointsEarned?: number | null;
+    amountRequired?: number | null;
     logoUrl?: string | null;
     backgroundColor?: string | null;
     foregroundColor?: string | null;
@@ -82,6 +87,8 @@ type CardInformation = {
     name: string;
     description?: string | null;
     requiredValue: number;
+    rewardType?: number;
+    rewardValue?: number | null;
   } | null;
   lifetimeEarned?: number;
   lifetimeRedeemed?: number;
@@ -94,6 +101,8 @@ type CardInformation = {
   lastActivityAt?: string | null;
   walletPassCount?: number;
   walletPlatform?: string | null;
+  walletInstalledAt?: string | null;
+  walletSerialNumber?: string | null;
 };
 
 type ApiPayload = {
@@ -105,6 +114,9 @@ type ApiPayload = {
   rewardAvailable?: boolean;
   totalSpent?: number;
   purchaseCount?: number;
+  programType?: number;
+  earnedAmount?: number;
+  earnedUnit?: "stamps" | "points";
   reward?: CardInformation["reward"];
 };
 
@@ -144,7 +156,7 @@ function getErrorMessage(caught: unknown, fallback: string) {
 }
 
 export default function ScannerPage() {
-  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
   const [manualMode, setManualMode] = useState(false);
   const [qrToken, setQrToken] = useState("");
   const [purchaseAmount, setPurchaseAmount] = useState("");
@@ -155,10 +167,49 @@ export default function ScannerPage() {
   const [card, setCard] = useState<CardInformation | null>(null);
 
   const brandLogoUrl = useMemo(
-    () =>
-      resolveLogoUrl(card?.program.logoUrl ?? card?.organization.logoUrl),
+    () => resolveLogoUrl(card?.program.logoUrl ?? card?.organization.logoUrl),
     [card?.organization.logoUrl, card?.program.logoUrl],
   );
+
+  const isPointsProgram = card?.program.programType === 2;
+
+  const estimatedPoints = useMemo(() => {
+    if (!card || card.program.programType !== 2) return 0;
+
+    const amount = Number(purchaseAmount);
+    const amountRequired = Number(card.program.amountRequired ?? 0);
+    const pointsEarned = Number(card.program.pointsEarned ?? 0);
+
+    if (amount <= 0 || amountRequired <= 0 || pointsEarned <= 0) return 0;
+
+    return Math.floor(amount / amountRequired) * pointsEarned;
+  }, [card, purchaseAmount]);
+
+  const walletInstalled = useMemo(() => {
+    if (!card) return false;
+
+    return Boolean(
+      (card.walletPassCount ?? 0) > 0 ||
+      card.walletPlatform ||
+      card.walletInstalledAt,
+    );
+  }, [card]);
+
+  const walletStatus = useMemo(() => {
+    if (!card) return "No disponible";
+
+    if (walletInstalled) {
+      return card.walletPlatform
+        ? `Instalada en ${card.walletPlatform}`
+        : "Instalada";
+    }
+
+    // Solamente afirmamos que no está instalada cuando la API manda cero.
+    // Si el campo no llegó, el frontend no puede conocer el estado real.
+    if (card.walletPassCount === 0) return "Sin instalar";
+
+    return "No disponible";
+  }, [card, walletInstalled]);
 
   const lookupCard = useCallback(
     async (rawValue: string) => {
@@ -211,7 +262,8 @@ export default function ScannerPage() {
 
     if (!Number.isFinite(numericPurchaseAmount) || numericPurchaseAmount <= 0) {
       toast.error("Total de compra inválido", {
-        description: "Ingresa un importe mayor a cero antes de agregar el sello.",
+        description:
+          "Ingresa un importe mayor a cero antes de registrar la compra.",
       });
       return;
     }
@@ -219,7 +271,7 @@ export default function ScannerPage() {
     setAddingStamp(true);
 
     try {
-      const response = await fetch("/api/wallet/cards/stamps", {
+      const response = await fetch("/api/wallet/cards/earn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -232,10 +284,15 @@ export default function ScannerPage() {
       const payload = (await response.json()) as ApiPayload;
 
       if (!response.ok) {
-        throw new Error(payload.message ?? "No fue posible agregar el sello.");
+        throw new Error(
+          payload.message ?? "No fue posible registrar el progreso.",
+        );
       }
 
-      const newBalance = Number(payload.balance ?? card.balance + 1);
+      const earnedAmount = Number(
+        payload.earnedAmount ?? (isPointsProgram ? estimatedPoints : 1),
+      );
+      const newBalance = Number(payload.balance ?? card.balance + earnedAmount);
       const target = Number(payload.target ?? card.target);
 
       setCard((current) =>
@@ -255,7 +312,8 @@ export default function ScannerPage() {
               purchaseCount: Number(
                 payload.purchaseCount ?? (current.purchaseCount ?? 0) + 1,
               ),
-              lifetimeEarned: (current.lifetimeEarned ?? current.balance) + 1,
+              lifetimeEarned:
+                (current.lifetimeEarned ?? current.balance) + earnedAmount,
               transactionCount: (current.transactionCount ?? 0) + 1,
               lastPurchaseAmount: numericPurchaseAmount,
               lastPurchaseAt: new Date().toISOString(),
@@ -265,16 +323,23 @@ export default function ScannerPage() {
 
       setPurchaseAmount("");
 
-      toast.success("Sello agregado", {
-        description: `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
+      toast.success(isPointsProgram ? "Puntos agregados" : "Sello agregado", {
+        description: isPointsProgram
+          ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
+          : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
       });
     } catch (caught) {
-      toast.error("No se pudo agregar el sello", {
-        description: getErrorMessage(
-          caught,
-          "Ocurrió un error inesperado al registrar el sello.",
-        ),
-      });
+      toast.error(
+        isPointsProgram
+          ? "No se pudieron agregar los puntos"
+          : "No se pudo agregar el sello",
+        {
+          description: getErrorMessage(
+            caught,
+            "Ocurrió un error inesperado al registrar el progreso.",
+          ),
+        },
+      );
     } finally {
       setAddingStamp(false);
     }
@@ -342,14 +407,18 @@ export default function ScannerPage() {
     setCard(null);
     setQrToken("");
     setPurchaseAmount("");
-    setCameraEnabled(false);
+    setCameraEnabled(true);
     setManualMode(false);
   }
 
   return (
-    <main className="mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] pb-12 pt-8 text-[#111827]">
-      <section className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+    <main
+      className={`mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] text-[#111827] ${
+        card ? "pb-6 pt-4" : "pb-12 pt-8"
+      }`}
+    >
+      {!card && (
+        <section className="mb-7">
           <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e11d48]">
             Atención al cliente
           </span>
@@ -357,58 +426,13 @@ export default function ScannerPage() {
             Escanear tarjeta
           </h1>
           <p className="mt-3 text-sm text-slate-500 sm:text-base">
-            Consulta los sellos, las compras y la información del cliente.
+            Consulta el progreso, las compras y la información del cliente.
           </p>
-        </div>
-
-        {card && (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-[46px] rounded-[14px] border-[#e5e7eb] bg-white px-5 font-extrabold shadow-sm"
-            onClick={resetScanner}
-          >
-            <RotateCcw className="mr-2 size-4" />
-            Escanear otra
-          </Button>
-        )}
-      </section>
+        </section>
+      )}
 
       {!card && (
         <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-          {!cameraEnabled && !manualMode && (
-            <div className="flex min-h-[430px] flex-col items-center justify-center px-6 py-12 text-center">
-              <span className="grid size-16 place-items-center rounded-2xl bg-[#fff1f4] text-[#e11d48]">
-                <QrCode size={31} />
-              </span>
-              <h2 className="mt-5 text-2xl font-extrabold tracking-[-0.03em] text-[#111827]">
-                Busca una tarjeta
-              </h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                Escanea el código QR del cliente o ingresa manualmente el token.
-              </p>
-              <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:flex-row">
-                <Button
-                  type="button"
-                  className="h-[46px] flex-1 rounded-[14px] bg-[#e11d48] font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
-                  onClick={() => setCameraEnabled(true)}
-                >
-                  <Camera className="mr-2 size-5" />
-                  Abrir cámara
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-[46px] flex-1 rounded-[14px] border-[#e5e7eb] font-extrabold"
-                  onClick={() => setManualMode(true)}
-                >
-                  <Keyboard className="mr-2 size-5" />
-                  Ingresar código
-                </Button>
-              </div>
-            </div>
-          )}
-
           {cameraEnabled && (
             <div className="flex flex-col items-center px-4 py-8 sm:px-8">
               <div className="relative aspect-square w-full max-w-[520px] overflow-hidden rounded-[22px] border-4 border-[#111827] bg-black shadow-xl [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
@@ -461,7 +485,10 @@ export default function ScannerPage() {
                 type="button"
                 variant="ghost"
                 className="mb-5 w-fit px-0 font-bold text-slate-500 hover:bg-transparent"
-                onClick={() => setManualMode(false)}
+                onClick={() => {
+                  setManualMode(false);
+                  setCameraEnabled(true);
+                }}
               >
                 <ArrowLeft className="mr-2 size-4" />
                 Regresar
@@ -475,7 +502,10 @@ export default function ScannerPage() {
               <p className="mt-2 text-sm text-slate-500">
                 Pega el token contenido en el QR de la tarjeta.
               </p>
-              <Label htmlFor="qrToken" className="mt-6 font-bold text-[#111827]">
+              <Label
+                htmlFor="qrToken"
+                className="mt-6 font-bold text-[#111827]"
+              >
                 Código de la tarjeta
               </Label>
               <Input
@@ -505,9 +535,9 @@ export default function ScannerPage() {
       )}
 
       {card && (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.75fr)]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
           <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-            <div className="flex items-center gap-4 border-b border-slate-100 px-5 py-6 sm:px-7">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
               <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[#fff1f4] text-[#e11d48]">
                 {brandLogoUrl ? (
                   // La API puede servir logos desde un dominio dinámico.
@@ -532,86 +562,142 @@ export default function ScannerPage() {
                   {card.program.name} · {card.cardNumber}
                 </p>
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-auto h-10 shrink-0 rounded-xl border-[#e5e7eb] bg-white px-3 font-extrabold shadow-sm sm:px-4"
+                onClick={resetScanner}
+              >
+                <RotateCcw className="size-4 sm:mr-2" />
+                <span className="hidden sm:inline">Escanear otra</span>
+              </Button>
             </div>
 
-            <div className="px-5 py-6 sm:px-7">
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <small className="font-extrabold uppercase tracking-[0.12em] text-slate-500">
-                    Progreso
-                  </small>
-                  <p className="text-3xl font-extrabold tracking-[-0.04em] text-[#111827]">
-                    {card.balance} de {card.target}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <small className="font-extrabold uppercase tracking-[0.12em] text-slate-500">
-                    Sellos faltantes
-                  </small>
-                  <p className="text-3xl font-extrabold tracking-[-0.04em] text-[#111827]">
-                    {card.remaining}
-                  </p>
-                </div>
-              </div>
+            <div className="px-5 py-5 sm:px-6">
+              {isPointsProgram ? (
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-11 place-items-center rounded-[14px] bg-[#fff1f4] text-[#e11d48]">
+                        <Coins size={23} />
+                      </span>
+                      <div>
+                        <small className="font-bold uppercase tracking-[0.12em] text-slate-500">
+                          Puntos disponibles
+                        </small>
+                        <strong className="block text-3xl font-extrabold tracking-[-0.04em] text-[#111827]">
+                          {card.balance.toLocaleString("es-MX")}
+                        </strong>
+                      </div>
+                    </div>
 
-              <div className="mt-5 grid grid-cols-5 gap-2 sm:grid-cols-10">
-                {Array.from({ length: card.target }).map((_, index) => {
-                  const earned = index < card.balance;
+                    <div className="text-right">
+                      <small className="font-bold uppercase tracking-[0.12em] text-slate-500">
+                        Meta
+                      </small>
+                      <strong className="block text-xl font-extrabold text-[#111827]">
+                        {card.target.toLocaleString("es-MX")}
+                      </strong>
+                    </div>
+                  </div>
 
-                  return (
+                  <div
+                    className="mt-5 h-2.5 overflow-hidden rounded-full bg-slate-200"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={card.target}
+                    aria-valuenow={Math.min(card.balance, card.target)}
+                  >
                     <span
-                      key={index}
-                      title={earned ? `Sello ${index + 1} obtenido` : `Sello ${index + 1} pendiente`}
-                      className={`grid aspect-square min-h-12 place-items-center overflow-hidden rounded-xl border transition ${
-                        earned
-                          ? "border-[#e11d48] bg-[#e11d48] text-white shadow-[0_7px_16px_rgba(225,29,72,0.18)]"
-                          : "border-slate-200 bg-slate-50 text-slate-300"
-                      }`}
-                    >
-                      {brandLogoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={brandLogoUrl}
-                          alt=""
-                          className={`h-full w-full object-cover ${
-                            earned ? "" : "grayscale opacity-25"
-                          }`}
-                        />
-                      ) : (
-                        <Stamp size={20} />
-                      )}
+                      className="block h-full rounded-full bg-[#e11d48] transition-[width] duration-300"
+                      style={{
+                        width: `${Math.min((card.balance / Math.max(card.target, 1)) * 100, 100)}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-500">
+                    <span>
+                      {Math.max(card.target - card.balance, 0).toLocaleString(
+                        "es-MX",
+                      )}{" "}
+                      puntos para la meta
                     </span>
-                  );
-                })}
-              </div>
-
-              <div
-                className={`mt-6 flex items-center gap-3 rounded-2xl border p-4 ${
-                  card.rewardAvailable
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 bg-[#fafafa] text-[#111827]"
-                }`}
-              >
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white shadow-sm">
-                  {card.rewardAvailable ? <Gift size={20} /> : <Stamp size={20} />}
-                </span>
-                <div>
-                  <strong className="block text-sm">
-                    {card.rewardAvailable
-                      ? "Recompensa disponible"
-                      : "Sigue acumulando"}
-                  </strong>
-                  <span className="text-sm opacity-75">
-                    {card.rewardAvailable
-                      ? card.reward?.name ?? "El cliente alcanzó la meta."
-                      : `Faltan ${card.remaining} sellos para la recompensa.`}
-                  </span>
+                    <span>
+                      {card.program.pointsEarned ?? 0} puntos por cada $
+                      {Number(card.program.amountRequired ?? 0).toLocaleString(
+                        "es-MX",
+                      )}{" "}
+                      MXN
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div
+                  className="grid grid-cols-5 gap-2 sm:grid-cols-10"
+                  aria-label={`${card.balance} de ${card.target} sellos acumulados`}
+                >
+                  {Array.from({ length: Math.min(card.target, 20) }).map(
+                    (_, index) => {
+                      const earned = index < card.balance;
 
-              {!card.rewardAvailable && (
-                <div className="mt-6">
-                  <Label htmlFor="purchaseAmount" className="font-bold text-[#111827]">
+                      return (
+                        <span
+                          key={index}
+                          title={
+                            earned
+                              ? `Sello ${index + 1} obtenido`
+                              : `Sello ${index + 1} pendiente`
+                          }
+                          className="grid aspect-square min-h-9 place-items-center overflow-hidden rounded-full"
+                        >
+                          {brandLogoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={brandLogoUrl}
+                              alt=""
+                              className={`h-[82%] w-[82%] rounded-full object-contain ${
+                                earned ? "opacity-100" : "grayscale opacity-20"
+                              }`}
+                            />
+                          ) : (
+                            <Stamp
+                              className={
+                                earned ? "text-[#e11d48]" : "text-slate-200"
+                              }
+                              size={21}
+                            />
+                          )}
+                        </span>
+                      );
+                    },
+                  )}
+                </div>
+              )}
+
+              {card.rewardAvailable && (
+                <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm">
+                    <Gift size={19} />
+                  </span>
+                  <div>
+                    <strong className="block text-sm">
+                      Recompensa disponible
+                    </strong>
+                    <span className="text-sm opacity-75">
+                      {card.reward?.name ?? "El cliente alcanzó la meta."}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {(!card.rewardAvailable || isPointsProgram) && (
+                <div className="mt-5">
+                  <Label
+                    htmlFor="purchaseAmount"
+                    className="font-bold text-[#111827]"
+                  >
                     Total de la compra
                   </Label>
                   <div className="relative mt-2">
@@ -625,7 +711,9 @@ export default function ScannerPage() {
                       min="0.01"
                       step="0.01"
                       value={purchaseAmount}
-                      onChange={(event) => setPurchaseAmount(event.target.value)}
+                      onChange={(event) =>
+                        setPurchaseAmount(event.target.value)
+                      }
                       placeholder="0.00"
                       className="h-14 rounded-[13px] border-[#e5e7eb] pl-9 pr-16 text-lg font-bold focus-visible:ring-[#e11d48]"
                     />
@@ -633,66 +721,155 @@ export default function ScannerPage() {
                       MXN
                     </small>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Se registrará en el historial de compras del cliente.
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {isPointsProgram && estimatedPoints > 0
+                      ? `Esta compra generará ${estimatedPoints} puntos.`
+                      : "Se registrará en el historial de compras del cliente."}
                   </p>
                 </div>
               )}
 
-              {card.rewardAvailable ? (
-                <Button
-                  type="button"
-                  className="mt-6 h-12 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700"
-                  onClick={() => setRedeemDialogOpen(true)}
-                >
-                  <Gift className="mr-2 size-5" />
-                  Canjear recompensa
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="mt-6 h-[46px] rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
-                  disabled={addingStamp}
-                  onClick={addStamp}
-                >
-                  {addingStamp ? (
-                    <LoaderCircle className="mr-2 size-5 animate-spin" />
-                  ) : (
-                    <Stamp className="mr-2 size-5" />
-                  )}
-                  {addingStamp ? "Agregando sello…" : "Agregar 1 sello"}
-                </Button>
-              )}
+              <div className="mt-5 flex flex-wrap gap-3">
+                {card.rewardAvailable && (
+                  <Button
+                    type="button"
+                    className="h-11 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700"
+                    onClick={() => setRedeemDialogOpen(true)}
+                  >
+                    <Gift className="mr-2 size-5" />
+                    Canjear recompensa
+                  </Button>
+                )}
+
+                {(!card.rewardAvailable || isPointsProgram) && (
+                  <Button
+                    type="button"
+                    className="h-11 rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
+                    disabled={
+                      addingStamp || (isPointsProgram && estimatedPoints <= 0)
+                    }
+                    onClick={addStamp}
+                  >
+                    {addingStamp ? (
+                      <LoaderCircle className="mr-2 size-5 animate-spin" />
+                    ) : isPointsProgram ? (
+                      <Coins className="mr-2 size-5" />
+                    ) : (
+                      <Stamp className="mr-2 size-5" />
+                    )}
+                    {addingStamp
+                      ? isPointsProgram
+                        ? "Agregando puntos…"
+                        : "Agregando sello…"
+                      : isPointsProgram
+                        ? estimatedPoints > 0
+                          ? `Agregar ${estimatedPoints} puntos`
+                          : "Ingresa una compra válida"
+                        : "Agregar 1 sello"}
+                  </Button>
+                )}
+              </div>
             </div>
           </Card>
 
-          <div className="space-y-5">
-            <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-6">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+            <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-5">
               <h3 className="text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
                 Información del cliente
               </h3>
-              <div className="mt-5 space-y-4">
-                <InfoRow icon={<Mail size={17} />} label="Correo" value={card.customer.email ?? "No registrado"} />
-                <InfoRow icon={<Phone size={17} />} label="Teléfono" value={card.customer.phone ?? "No registrado"} />
-                <InfoRow icon={<CalendarDays size={17} />} label="Nacimiento" value={formatDate(card.customer.birthDate)} />
-                <InfoRow icon={<UserRound size={17} />} label="Cliente desde" value={formatDate(card.customer.createdAt)} />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <InfoRow
+                  icon={<Mail size={17} />}
+                  label="Correo"
+                  value={card.customer.email ?? "No registrado"}
+                />
+                <InfoRow
+                  icon={<Phone size={17} />}
+                  label="Teléfono"
+                  value={card.customer.phone ?? "No registrado"}
+                />
+                <InfoRow
+                  icon={<CalendarDays size={17} />}
+                  label="Nacimiento"
+                  value={formatDate(card.customer.birthDate)}
+                />
+                <InfoRow
+                  icon={<UserRound size={17} />}
+                  label="Cliente desde"
+                  value={formatDate(card.customer.createdAt)}
+                />
               </div>
             </Card>
 
-            <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-6">
+            <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-5">
               <h3 className="text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
-                Actividad
+                Información de la tarjeta
               </h3>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <Metric icon={<ShoppingBag size={18} />} label="Total gastado" value={formatMoney(card.totalSpent)} />
-                <Metric icon={<CreditCard size={18} />} label="Compras" value={String(card.purchaseCount ?? 0)} />
-                <Metric icon={<Stamp size={18} />} label="Sellos históricos" value={String(card.lifetimeEarned ?? card.balance)} />
-                <Metric icon={<Gift size={18} />} label="Canjes" value={String(card.lifetimeRedeemed ?? 0)} />
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Metric
+                  icon={<ShoppingBag size={18} />}
+                  label="Total gastado"
+                  value={formatMoney(card.totalSpent)}
+                />
+                <Metric
+                  icon={<CreditCard size={18} />}
+                  label="Compras"
+                  value={String(card.purchaseCount ?? 0)}
+                />
+                <Metric
+                  icon={
+                    isPointsProgram ? <Coins size={18} /> : <Stamp size={18} />
+                  }
+                  label={
+                    isPointsProgram ? "Puntos históricos" : "Sellos históricos"
+                  }
+                  value={String(card.lifetimeEarned ?? card.balance)}
+                />
+                <Metric
+                  icon={<Gift size={18} />}
+                  label="Canjes"
+                  value={String(card.lifetimeRedeemed ?? 0)}
+                />
               </div>
-              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                <InfoRow icon={<ShoppingBag size={17} />} label="Última compra" value={card.lastPurchaseAmount == null ? "No registrada" : formatMoney(card.lastPurchaseAmount)} />
-                <InfoRow icon={<CalendarDays size={17} />} label="Última actividad" value={formatDate(card.lastActivityAt ?? card.lastPurchaseAt)} />
-                <InfoRow icon={<WalletCards size={17} />} label="Wallet" value={card.walletPlatform ?? (card.walletPassCount ? `${card.walletPassCount} pase(s)` : "Sin instalar")} />
+              <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-1">
+                <InfoRow
+                  icon={<CreditCard size={17} />}
+                  label="Número de tarjeta"
+                  value={card.cardNumber}
+                />
+                <InfoRow
+                  icon={<WalletCards size={17} />}
+                  label="Wallet"
+                  value={walletStatus}
+                />
+                <InfoRow
+                  icon={<CalendarDays size={17} />}
+                  label="Instalada el"
+                  value={
+                    walletInstalled
+                      ? formatDate(card.walletInstalledAt)
+                      : "No disponible"
+                  }
+                />
+                <InfoRow
+                  icon={<Hash size={17} />}
+                  label="Número de serie"
+                  value={card.walletSerialNumber ?? "No disponible"}
+                />
+                <InfoRow
+                  icon={<ShoppingBag size={17} />}
+                  label="Última compra"
+                  value={
+                    card.lastPurchaseAmount == null
+                      ? "No registrada"
+                      : formatMoney(card.lastPurchaseAmount)
+                  }
+                />
+                <InfoRow
+                  icon={<CalendarDays size={17} />}
+                  label="Última actividad"
+                  value={formatDate(card.lastActivityAt ?? card.lastPurchaseAt)}
+                />
               </div>
             </Card>
           </div>
@@ -715,7 +892,8 @@ export default function ScannerPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="leading-6">
               Confirma que entregaste la recompensa a{" "}
-              <strong>{card?.customer.name}</strong>. Se descontarán los sellos
+              <strong>{card?.customer.name}</strong>. Se descontarán los{" "}
+              {isPointsProgram ? "puntos" : "sellos"}
               correspondientes.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -733,7 +911,10 @@ export default function ScannerPage() {
             )}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={redeemingReward} className="rounded-xl">
+            <AlertDialogCancel
+              disabled={redeemingReward}
+              className="rounded-xl"
+            >
               Cancelar
             </AlertDialogCancel>
             <Button
@@ -771,8 +952,12 @@ function InfoRow({
         {icon}
       </span>
       <div className="min-w-0">
-        <small className="block text-xs font-medium text-slate-500">{label}</small>
-        <strong className="block truncate text-sm text-[#111827]">{value}</strong>
+        <small className="block text-xs font-medium text-slate-500">
+          {label}
+        </small>
+        <strong className="block truncate text-sm text-[#111827]">
+          {value}
+        </strong>
       </div>
     </div>
   );
@@ -788,9 +973,11 @@ function Metric({
   value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
       <span className="text-[#e11d48]">{icon}</span>
-      <small className="mt-3 block text-xs font-medium text-slate-500">{label}</small>
+      <small className="mt-2 block text-xs font-medium text-slate-500">
+        {label}
+      </small>
       <strong className="mt-1 block truncate text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
         {value}
       </strong>

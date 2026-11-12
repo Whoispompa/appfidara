@@ -10,11 +10,11 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import {
   Check,
+  Coins,
   Gift,
   ImageIcon,
   LoaderCircle,
   Palette,
-  Repeat2,
   Save,
   Stamp,
   Upload,
@@ -31,6 +31,8 @@ type RewardInformation = {
   name: string;
   description?: string | null;
   requiredValue: number;
+  rewardType: number;
+  rewardValue?: number | null;
 };
 
 type ProgramInformation = {
@@ -41,6 +43,8 @@ type ProgramInformation = {
   description?: string | null;
   programType: number;
   targetValue: number;
+  pointsEarned?: number | null;
+  amountRequired?: number | null;
   isRecurring: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
@@ -53,9 +57,12 @@ type ProgramInformation = {
 };
 
 type ProgramForm = {
+  programType: number;
   name: string;
   description: string;
   targetValue: number;
+  pointsEarned: number;
+  amountRequired: number;
   isRecurring: boolean;
   cardBackgroundColor: string;
   cardForegroundColor: string;
@@ -63,6 +70,8 @@ type ProgramForm = {
   showPoweredByFidara: boolean;
   rewardName: string;
   rewardDescription: string;
+  rewardType: number;
+  rewardValue: number;
 };
 
 type ImageFiles = {
@@ -97,9 +106,12 @@ function absoluteUrl(value?: string | null) {
 }
 
 const initialForm: ProgramForm = {
+  programType: 1,
   name: "",
   description: "",
   targetValue: 10,
+  pointsEarned: 1,
+  amountRequired: 10,
   isRecurring: true,
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
@@ -107,6 +119,8 @@ const initialForm: ProgramForm = {
   showPoweredByFidara: true,
   rewardName: "",
   rewardDescription: "",
+  rewardType: 1,
+  rewardValue: 0,
 };
 
 const emptyProgram: ProgramInformation = {
@@ -118,6 +132,8 @@ const emptyProgram: ProgramInformation = {
   description: "",
   programType: 1,
   targetValue: 10,
+  pointsEarned: null,
+  amountRequired: null,
   isRecurring: true,
   cardLogoUrl: null,
   activeStampImageUrl: null,
@@ -132,6 +148,8 @@ const emptyProgram: ProgramInformation = {
     name: "",
     description: "",
     requiredValue: 10,
+    rewardType: 1,
+    rewardValue: null,
   },
 };
 
@@ -176,6 +194,9 @@ export default function CardEditorPage() {
   const [error, setError] = useState("");
 
   const [success, setSuccess] = useState("");
+
+  const isStampProgram = form.programType === 1;
+  const isPointsProgram = form.programType === 2;
 
   const loadProgram = useCallback(async () => {
     setLoading(true);
@@ -225,10 +246,15 @@ export default function CardEditorPage() {
       setProgram(data);
 
       setForm({
+        programType: Number(data.programType) || 1,
         name: data.name,
         description: data.description ?? "",
 
         targetValue: Number(data.targetValue),
+
+        pointsEarned: Number(data.pointsEarned ?? 1),
+
+        amountRequired: Number(data.amountRequired ?? 10),
 
         isRecurring: data.isRecurring,
 
@@ -243,6 +269,10 @@ export default function CardEditorPage() {
         rewardName: data.reward?.name ?? "",
 
         rewardDescription: data.reward?.description ?? "",
+
+        rewardType: Number(data.reward?.rewardType ?? 1),
+
+        rewardValue: Number(data.reward?.rewardValue ?? 0),
       });
 
       setPreviews({
@@ -359,13 +389,41 @@ export default function CardEditorPage() {
       return;
     }
 
-    if (
-      !Number.isInteger(form.targetValue) ||
-      form.targetValue < 1 ||
-      form.targetValue > 20
-    ) {
-      setError("La meta debe ser un número entero entre 1 y 20.");
+    if (isStampProgram) {
+      if (
+        !Number.isInteger(form.targetValue) ||
+        form.targetValue < 1 ||
+        form.targetValue > 20
+      ) {
+        setError("La meta debe ser un número entero entre 1 y 20 sellos.");
+        return;
+      }
+    }
 
+    if (isPointsProgram) {
+      if (form.targetValue <= 0) {
+        setError(
+          "Los puntos necesarios para la recompensa deben ser mayores a cero.",
+        );
+        return;
+      }
+
+      if (form.amountRequired <= 0 || form.pointsEarned <= 0) {
+        setError("La equivalencia para generar puntos debe ser mayor a cero.");
+        return;
+      }
+    }
+
+    if (
+      form.rewardType === 3 &&
+      (form.rewardValue <= 0 || form.rewardValue > 100)
+    ) {
+      setError("El porcentaje de descuento debe estar entre 1 y 100.");
+      return;
+    }
+
+    if (form.rewardType === 2 && form.rewardValue <= 0) {
+      setError("El valor del descuento debe ser mayor a cero.");
       return;
     }
 
@@ -380,9 +438,14 @@ export default function CardEditorPage() {
 
       formData.append("Description", form.description.trim());
 
-      formData.append("ProgramType", String(program.programType || 1));
+      formData.append("ProgramType", String(form.programType));
 
       formData.append("TargetValue", String(form.targetValue));
+
+      if (isPointsProgram) {
+        formData.append("PointsEarned", String(form.pointsEarned));
+        formData.append("AmountRequired", String(form.amountRequired));
+      }
 
       formData.append("IsRecurring", String(form.isRecurring));
 
@@ -398,15 +461,21 @@ export default function CardEditorPage() {
 
       formData.append("RewardDescription", form.rewardDescription.trim());
 
+      formData.append("RewardType", String(form.rewardType));
+
+      if (form.rewardType === 2 || form.rewardType === 3) {
+        formData.append("RewardValue", String(form.rewardValue));
+      }
+
       if (files.logo) {
         formData.append("Logo", files.logo);
       }
 
-      if (files.activeStamp) {
+      if (isStampProgram && files.activeStamp) {
         formData.append("ActiveStamp", files.activeStamp);
       }
 
-      if (files.inactiveStamp) {
+      if (isStampProgram && files.inactiveStamp) {
         formData.append("InactiveStamp", files.inactiveStamp);
       }
 
@@ -549,6 +618,49 @@ export default function CardEditorPage() {
               </div>
             </div>
 
+            <div className="program-type-grid">
+              <button
+                type="button"
+                className={form.programType === 1 ? "selected" : ""}
+                disabled={!isNewProgram}
+                onClick={() => {
+                  updateField("programType", 1);
+                  updateField("targetValue", 10);
+                }}
+              >
+                <span>
+                  <Stamp size={22} />
+                </span>
+                <strong>Programa de sellos</strong>
+                <small>Una compra o visita agrega un sello.</small>
+              </button>
+
+              <button
+                type="button"
+                className={form.programType === 2 ? "selected" : ""}
+                disabled={!isNewProgram}
+                onClick={() => {
+                  updateField("programType", 2);
+                  updateField("targetValue", 100);
+                }}
+              >
+                <span>
+                  <Coins size={22} />
+                </span>
+                <strong>Programa de puntos</strong>
+                <small>
+                  El cliente obtiene puntos según el total de su compra.
+                </small>
+              </button>
+            </div>
+
+            {!isNewProgram && (
+              <p className="program-type-note">
+                El tipo de programa no puede cambiarse después de crear la
+                tarjeta.
+              </p>
+            )}
+
             <div className="settings-fields">
               <label>
                 <span>Nombre del programa</span>
@@ -589,21 +701,77 @@ export default function CardEditorPage() {
             </div>
 
             <div className="settings-fields reward-fields">
-              <label>
-                <span>Sellos requeridos</span>
+              {isStampProgram ? (
+                <label>
+                  <span>Sellos requeridos</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={form.targetValue}
+                    onChange={(event) =>
+                      updateField("targetValue", Number(event.target.value))
+                    }
+                    required
+                  />
+                </label>
+              ) : (
+                <>
+                  <label>
+                    <span>Por cada compra de</span>
+                    <div className="money-field">
+                      <b>$</b>
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={form.amountRequired}
+                        onChange={(event) =>
+                          updateField(
+                            "amountRequired",
+                            Number(event.target.value),
+                          )
+                        }
+                        required
+                      />
+                      <small>MXN</small>
+                    </div>
+                  </label>
 
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  step={1}
-                  value={form.targetValue}
-                  onChange={(event) =>
-                    updateField("targetValue", Number(event.target.value))
-                  }
-                  required
-                />
-              </label>
+                  <label>
+                    <span>Puntos otorgados</span>
+                    <input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={form.pointsEarned}
+                      onChange={(event) =>
+                        updateField("pointsEarned", Number(event.target.value))
+                      }
+                      required
+                    />
+                  </label>
+
+                  <label className="full-field">
+                    <span>Puntos necesarios para la recompensa</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={form.targetValue}
+                      onChange={(event) =>
+                        updateField("targetValue", Number(event.target.value))
+                      }
+                      required
+                    />
+                    <small className="field-help">
+                      Ejemplo: por cada ${form.amountRequired || 0} se otorgan{" "}
+                      {form.pointsEarned || 0} puntos.
+                    </small>
+                  </label>
+                </>
+              )}
 
               <label>
                 <span>Nombre de la recompensa</span>
@@ -618,6 +786,45 @@ export default function CardEditorPage() {
                   required
                 />
               </label>
+
+              <label>
+                <span>Tipo de recompensa</span>
+                <select
+                  value={form.rewardType}
+                  onChange={(event) =>
+                    updateField("rewardType", Number(event.target.value))
+                  }
+                >
+                  <option value={1}>Producto o beneficio</option>
+                  <option value={2}>Descuento en pesos</option>
+                  <option value={3}>Descuento porcentual</option>
+                </select>
+              </label>
+
+              {(form.rewardType === 2 || form.rewardType === 3) && (
+                <label>
+                  <span>
+                    {form.rewardType === 2
+                      ? "Valor del descuento"
+                      : "Porcentaje de descuento"}
+                  </span>
+                  <div className="money-field">
+                    {form.rewardType === 2 && <b>$</b>}
+                    <input
+                      type="number"
+                      min={0.01}
+                      max={form.rewardType === 3 ? 100 : undefined}
+                      step={0.01}
+                      value={form.rewardValue}
+                      onChange={(event) =>
+                        updateField("rewardValue", Number(event.target.value))
+                      }
+                      required
+                    />
+                    <small>{form.rewardType === 2 ? "MXN" : "%"}</small>
+                  </div>
+                </label>
+              )}
 
               <label className="full-field">
                 <span>Descripción de la recompensa</span>
@@ -651,8 +858,6 @@ export default function CardEditorPage() {
                     El cliente podrá comenzar otra tarjeta al recibir su premio.
                   </small>
                 </span>
-                {/* 
-                <Repeat2 size={18} /> */}
               </label>
             </div>
           </section>
@@ -758,55 +963,62 @@ export default function CardEditorPage() {
                 />
               </label>
 
-              <label className="image-upload">
-                <span>Sello activo</span>
+              {isStampProgram && (
+                <>
+                  <label className="image-upload">
+                    <span>Sello activo</span>
 
-                <div>
-                  {previews.activeStamp ? (
-                    <img src={previews.activeStamp} alt="Sello activo" />
-                  ) : (
-                    <Stamp size={24} />
-                  )}
+                    <div>
+                      {previews.activeStamp ? (
+                        <img src={previews.activeStamp} alt="Sello activo" />
+                      ) : (
+                        <Stamp size={24} />
+                      )}
 
-                  <strong>
-                    <Upload size={15} />
-                    Cambiar
-                  </strong>
-                </div>
+                      <strong>
+                        <Upload size={15} />
+                        Cambiar
+                      </strong>
+                    </div>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) =>
-                    selectImage("activeStamp", "activeStamp", event)
-                  }
-                />
-              </label>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) =>
+                        selectImage("activeStamp", "activeStamp", event)
+                      }
+                    />
+                  </label>
 
-              <label className="image-upload">
-                <span>Sello inactivo</span>
+                  <label className="image-upload">
+                    <span>Sello inactivo</span>
 
-                <div>
-                  {previews.inactiveStamp ? (
-                    <img src={previews.inactiveStamp} alt="Sello inactivo" />
-                  ) : (
-                    <Stamp size={24} />
-                  )}
+                    <div>
+                      {previews.inactiveStamp ? (
+                        <img
+                          src={previews.inactiveStamp}
+                          alt="Sello inactivo"
+                        />
+                      ) : (
+                        <Stamp size={24} />
+                      )}
 
-                  <strong>
-                    <Upload size={15} />
-                    Cambiar
-                  </strong>
-                </div>
+                      <strong>
+                        <Upload size={15} />
+                        Cambiar
+                      </strong>
+                    </div>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) =>
-                    selectImage("inactiveStamp", "inactiveStamp", event)
-                  }
-                />
-              </label>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) =>
+                        selectImage("inactiveStamp", "inactiveStamp", event)
+                      }
+                    />
+                  </label>
+                </>
+              )}
             </div>
 
             {/* <label className="settings-toggle powered-toggle">
@@ -837,6 +1049,7 @@ export default function CardEditorPage() {
 
             <WalletCardPreview
               name={form.name}
+              programType={form.programType}
               logoUrl={previews.logo}
               activeStampUrl={previews.activeStamp}
               inactiveStampUrl={previews.inactiveStamp}
@@ -844,7 +1057,9 @@ export default function CardEditorPage() {
               foregroundColor={form.cardForegroundColor}
               labelColor={form.cardLabelColor}
               targetValue={form.targetValue}
-              balance={4}
+              pointsEarned={form.pointsEarned}
+              amountRequired={form.amountRequired}
+              balance={isPointsProgram ? Math.min(form.targetValue, 40) : 4}
               rewardsAvailable={0}
               showPoweredByFidara={form.showPoweredByFidara}
             />
