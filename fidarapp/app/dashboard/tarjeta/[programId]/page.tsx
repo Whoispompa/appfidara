@@ -9,15 +9,22 @@ import {
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  BadgePercent,
+  Banknote,
   Check,
   Coins,
+  CreditCard,
+  Crown,
   Gift,
   ImageIcon,
   LoaderCircle,
   Palette,
   Save,
   Stamp,
+  Ticket,
   Upload,
+  Users,
+  X,
 } from "lucide-react";
 
 import { Copy, ExternalLink, FileDown } from "lucide-react";
@@ -45,6 +52,8 @@ type ProgramInformation = {
   targetValue: number;
   pointsEarned?: number | null;
   amountRequired?: number | null;
+  pointsEarningMethod?: number | null;
+  limitOneVisitPerDay?: boolean;
   isRecurring: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
@@ -52,6 +61,8 @@ type ProgramInformation = {
   cardBackgroundColor?: string | null;
   cardForegroundColor?: string | null;
   cardLabelColor?: string | null;
+  cardStripImageUrl?: string | null;
+  cardStripColor?: string | null;
   showPoweredByFidara: boolean;
   reward: RewardInformation;
 };
@@ -63,10 +74,14 @@ type ProgramForm = {
   targetValue: number;
   pointsEarned: number;
   amountRequired: number;
+  pointsEarningMethod: number;
+  limitOneVisitPerDay: boolean;
   isRecurring: boolean;
   cardBackgroundColor: string;
   cardForegroundColor: string;
   cardLabelColor: string;
+  cardStripColor: string;
+  stripDesignMode: "image" | "color";
   showPoweredByFidara: boolean;
   rewardName: string;
   rewardDescription: string;
@@ -78,12 +93,14 @@ type ImageFiles = {
   logo: File | null;
   activeStamp: File | null;
   inactiveStamp: File | null;
+  stripImage: File | null;
 };
 
 type ImagePreviews = {
   logo: string | null;
   activeStamp: string | null;
   inactiveStamp: string | null;
+  stripImage: string | null;
 };
 
 const apiUrl =
@@ -112,10 +129,14 @@ const initialForm: ProgramForm = {
   targetValue: 10,
   pointsEarned: 1,
   amountRequired: 10,
+  pointsEarningMethod: 1,
+  limitOneVisitPerDay: false,
   isRecurring: true,
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
   cardLabelColor: "#f5f1e8",
+  cardStripColor: "#14532d",
+  stripDesignMode: "color",
   showPoweredByFidara: true,
   rewardName: "",
   rewardDescription: "",
@@ -134,6 +155,8 @@ const emptyProgram: ProgramInformation = {
   targetValue: 10,
   pointsEarned: null,
   amountRequired: null,
+  pointsEarningMethod: 1,
+  limitOneVisitPerDay: false,
   isRecurring: true,
   cardLogoUrl: null,
   activeStampImageUrl: null,
@@ -141,6 +164,8 @@ const emptyProgram: ProgramInformation = {
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
   cardLabelColor: "#f5f1e8",
+  cardStripImageUrl: null,
+  cardStripColor: "#14532d",
   showPoweredByFidara: true,
 
   reward: {
@@ -166,6 +191,10 @@ export default function CardEditorPage() {
 
   const isNewProgram = programId === "nueva";
 
+  const [programTypeSelected, setProgramTypeSelected] = useState(!isNewProgram);
+
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
+
   const [program, setProgram] = useState<ProgramInformation | null>(null);
 
   const [form, setForm] = useState<ProgramForm>(initialForm);
@@ -174,12 +203,14 @@ export default function CardEditorPage() {
     logo: null,
     activeStamp: null,
     inactiveStamp: null,
+    stripImage: null,
   });
 
   const [previews, setPreviews] = useState<ImagePreviews>({
     logo: null,
     activeStamp: null,
     inactiveStamp: null,
+    stripImage: null,
   });
 
   const joinUrl =
@@ -207,16 +238,22 @@ export default function CardEditorPage() {
 
       setForm(initialForm);
 
+      setProgramTypeSelected(false);
+
+      setShowTypeSelector(true);
+
       setFiles({
         logo: null,
         activeStamp: null,
         inactiveStamp: null,
+        stripImage: null,
       });
 
       setPreviews({
         logo: null,
         activeStamp: null,
         inactiveStamp: null,
+        stripImage: null,
       });
 
       setLoading(false);
@@ -245,6 +282,10 @@ export default function CardEditorPage() {
 
       setProgram(data);
 
+      setProgramTypeSelected(true);
+
+      setShowTypeSelector(false);
+
       setForm({
         programType: Number(data.programType) || 1,
         name: data.name,
@@ -256,6 +297,10 @@ export default function CardEditorPage() {
 
         amountRequired: Number(data.amountRequired ?? 10),
 
+        pointsEarningMethod: Number(data.pointsEarningMethod ?? 1),
+
+        limitOneVisitPerDay: Boolean(data.limitOneVisitPerDay),
+
         isRecurring: data.isRecurring,
 
         cardBackgroundColor: data.cardBackgroundColor ?? "#1b6726",
@@ -263,6 +308,10 @@ export default function CardEditorPage() {
         cardForegroundColor: data.cardForegroundColor ?? "#ffffff",
 
         cardLabelColor: data.cardLabelColor ?? "#f5f1e8",
+
+        cardStripColor: data.cardStripColor ?? "#14532d",
+
+        stripDesignMode: data.cardStripImageUrl ? "image" : "color",
 
         showPoweredByFidara: data.showPoweredByFidara,
 
@@ -281,6 +330,8 @@ export default function CardEditorPage() {
         activeStamp: absoluteUrl(data.activeStampImageUrl),
 
         inactiveStamp: absoluteUrl(data.inactiveStampImageUrl),
+
+        stripImage: absoluteUrl(data.cardStripImageUrl),
       });
     } catch (caught) {
       setError(
@@ -306,6 +357,25 @@ export default function CardEditorPage() {
       [field]: value,
     }));
 
+    setSuccess("");
+  }
+
+  function selectProgramType(programType: 1 | 2) {
+    setForm((current) => ({
+      ...current,
+      programType,
+      targetValue: programType === 1 ? 10 : 100,
+      pointsEarned: programType === 1 ? 1 : current.pointsEarned || 1,
+      amountRequired: programType === 1 ? 10 : current.amountRequired || 10,
+      pointsEarningMethod:
+        programType === 1 ? 1 : current.pointsEarningMethod || 1,
+      limitOneVisitPerDay:
+        programType === 1 ? false : current.limitOneVisitPerDay,
+    }));
+
+    setProgramTypeSelected(true);
+    setShowTypeSelector(false);
+    setError("");
     setSuccess("");
   }
 
@@ -354,6 +424,83 @@ export default function CardEditorPage() {
 
     setError("");
     setSuccess("");
+  }
+
+  async function selectStripImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (file.type !== "image/png") {
+      setError("La imagen central debe estar en formato PNG.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      setError("La imagen central no puede pesar más de 3 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const dimensions = await new Promise<{
+        width: number;
+        height: number;
+      }>((resolve, reject) => {
+        const image = new Image();
+
+        image.onload = () =>
+          resolve({
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          });
+
+        image.onerror = () =>
+          reject(new Error("No fue posible leer la imagen central."));
+
+        image.src = objectUrl;
+      });
+
+      if (dimensions.width < 1125 || dimensions.height < 432) {
+        URL.revokeObjectURL(objectUrl);
+        setError("La imagen central debe medir al menos 1125 × 432 px.");
+        event.target.value = "";
+        return;
+      }
+
+      setFiles((current) => ({
+        ...current,
+        stripImage: file,
+      }));
+
+      setPreviews((current) => {
+        if (current.stripImage?.startsWith("blob:")) {
+          URL.revokeObjectURL(current.stripImage);
+        }
+
+        return {
+          ...current,
+          stripImage: objectUrl,
+        };
+      });
+
+      updateField("stripDesignMode", "image");
+      setError("");
+      setSuccess("");
+    } catch (caught) {
+      URL.revokeObjectURL(objectUrl);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "No fue posible leer la imagen central.",
+      );
+      event.target.value = "";
+    }
   }
 
   async function copyJoinUrl() {
@@ -408,8 +555,15 @@ export default function CardEditorPage() {
         return;
       }
 
-      if (form.amountRequired <= 0 || form.pointsEarned <= 0) {
-        setError("La equivalencia para generar puntos debe ser mayor a cero.");
+      if (form.pointsEarned <= 0) {
+        setError("Los puntos otorgados deben ser mayores a cero.");
+        return;
+      }
+
+      if (form.pointsEarningMethod === 1 && form.amountRequired <= 0) {
+        setError(
+          "El importe necesario para generar puntos debe ser mayor a cero.",
+        );
         return;
       }
     }
@@ -444,7 +598,23 @@ export default function CardEditorPage() {
 
       if (isPointsProgram) {
         formData.append("PointsEarned", String(form.pointsEarned));
-        formData.append("AmountRequired", String(form.amountRequired));
+        formData.append(
+          "PointsEarningMethod",
+          String(form.pointsEarningMethod),
+        );
+        formData.append(
+          "LimitOneVisitPerDay",
+          String(form.pointsEarningMethod === 2 && form.limitOneVisitPerDay),
+        );
+        formData.append("CardStripColor", form.cardStripColor);
+
+        if (form.pointsEarningMethod === 1) {
+          formData.append("AmountRequired", String(form.amountRequired));
+        }
+
+        if (form.stripDesignMode === "image" && files.stripImage) {
+          formData.append("StripImage", files.stripImage);
+        }
       }
 
       formData.append("IsRecurring", String(form.isRecurring));
@@ -527,12 +697,15 @@ export default function CardEditorPage() {
         activeStamp: absoluteUrl(updated.activeStampImageUrl),
 
         inactiveStamp: absoluteUrl(updated.inactiveStampImageUrl),
+
+        stripImage: absoluteUrl(updated.cardStripImageUrl),
       });
 
       setFiles({
         logo: null,
         activeStamp: null,
         inactiveStamp: null,
+        stripImage: null,
       });
 
       setSuccess(payload.message ?? "Programa actualizado correctamente.");
@@ -558,6 +731,187 @@ export default function CardEditorPage() {
 
   return (
     <div className="card-editor-page">
+      {showTypeSelector && isNewProgram && (
+        <div
+          className="card-type-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="card-type-modal-title"
+        >
+          <section className="card-type-modal">
+            <div className="card-type-modal-heading">
+              <div>
+                <span className="page-eyebrow">Programa de lealtad</span>
+                <h2 id="card-type-modal-title">Elige el tipo de tarjeta</h2>
+                <p>
+                  Selecciona cómo quieres recompensar a tus clientes. Podrás
+                  personalizar el diseño en el siguiente paso.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="card-type-modal-close"
+                aria-label="Cerrar selector"
+                onClick={() => {
+                  if (programTypeSelected) {
+                    setShowTypeSelector(false);
+                  } else {
+                    router.back();
+                  }
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="card-type-catalog">
+              <button
+                type="button"
+                className="card-type-option available"
+                onClick={() => selectProgramType(1)}
+              >
+                <span className="card-type-icon">
+                  <Stamp size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Sellos</strong>
+                  <small>
+                    Premia compras o visitas con una tarjeta visual.
+                  </small>
+                </span>
+                <span className="card-type-status available">Disponible</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option available"
+                onClick={() => selectProgramType(2)}
+              >
+                <span className="card-type-icon">
+                  <Coins size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Puntos</strong>
+                  <small>Acumula puntos por gasto o por cada visita.</small>
+                </span>
+                <span className="card-type-status available">Disponible</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <Gift size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Premios</strong>
+                  <small>Entrega productos o beneficios sin acumulación.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <Users size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Afiliación</strong>
+                  <small>Beneficios exclusivos para clientes afiliados.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <BadgePercent size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Descuentos</strong>
+                  <small>Ofertas especiales y descuentos recurrentes.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <Banknote size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Cashback</strong>
+                  <small>Devuelve una parte de cada compra como saldo.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <Ticket size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Cupones</strong>
+                  <small>Cupones digitales para campañas y promociones.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <Crown size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Suscripción</strong>
+                  <small>Planes periódicos con beneficios incluidos.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+
+              <button
+                type="button"
+                className="card-type-option upcoming"
+                disabled
+              >
+                <span className="card-type-icon">
+                  <CreditCard size={25} />
+                </span>
+                <span className="card-type-copy">
+                  <strong>Tarjeta de regalo</strong>
+                  <small>Saldo digital para regalar y utilizar después.</small>
+                </span>
+                <span className="card-type-status">Próximamente</span>
+              </button>
+            </div>
+
+            <p className="card-type-modal-note">
+              Estamos preparando nuevos tipos de tarjeta para futuras versiones
+              de Fidara.
+            </p>
+          </section>
+        </div>
+      )}
+
       <section className="card-editor-heading">
         <div>
           <span className="page-eyebrow">Programa de lealtad</span>
@@ -618,47 +972,98 @@ export default function CardEditorPage() {
               </div>
             </div>
 
-            <div className="program-type-grid">
-              <button
-                type="button"
-                className={form.programType === 1 ? "selected" : ""}
-                disabled={!isNewProgram}
-                onClick={() => {
-                  updateField("programType", 1);
-                  updateField("targetValue", 10);
-                }}
-              >
-                <span>
-                  <Stamp size={22} />
-                </span>
-                <strong>Programa de sellos</strong>
-                <small>Una compra o visita agrega un sello.</small>
-              </button>
+            <div className="selected-program-summary">
+              <span className="selected-program-icon">
+                {isStampProgram ? <Stamp size={22} /> : <Coins size={22} />}
+              </span>
 
-              <button
-                type="button"
-                className={form.programType === 2 ? "selected" : ""}
-                disabled={!isNewProgram}
-                onClick={() => {
-                  updateField("programType", 2);
-                  updateField("targetValue", 100);
-                }}
-              >
-                <span>
-                  <Coins size={22} />
-                </span>
-                <strong>Programa de puntos</strong>
-                <small>
-                  El cliente obtiene puntos según el total de su compra.
+              <span>
+                <small>Tipo de tarjeta</small>
+                <strong>
+                  {isStampProgram ? "Programa de sellos" : "Programa de puntos"}
+                </strong>
+              </span>
+
+              {isNewProgram ? (
+                <button type="button" onClick={() => setShowTypeSelector(true)}>
+                  Cambiar tipo
+                </button>
+              ) : (
+                <small className="selected-program-locked">
+                  No se puede cambiar después de crearla
                 </small>
-              </button>
+              )}
             </div>
 
-            {!isNewProgram && (
-              <p className="program-type-note">
-                El tipo de programa no puede cambiarse después de crear la
-                tarjeta.
-              </p>
+            {isPointsProgram && (
+              <div className="points-earning-settings">
+                <div className="settings-card-heading">
+                  <div>
+                    <h3>¿Cómo acumularán puntos los clientes?</h3>
+                    <p>Selecciona la acción que generará los puntos.</p>
+                  </div>
+                </div>
+
+                <div className="program-type-grid">
+                  <button
+                    type="button"
+                    className={form.pointsEarningMethod === 1 ? "selected" : ""}
+                    onClick={() => {
+                      updateField("pointsEarningMethod", 1);
+                      updateField("limitOneVisitPerDay", false);
+                    }}
+                  >
+                    <span>
+                      <Coins size={22} />
+                    </span>
+                    <strong>Por gasto</strong>
+                    <small>Otorga puntos según el total de la compra.</small>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={form.pointsEarningMethod === 2 ? "selected" : ""}
+                    onClick={() => {
+                      updateField("pointsEarningMethod", 2);
+
+                      if (form.pointsEarned === 1) {
+                        updateField("pointsEarned", 10);
+                      }
+                    }}
+                  >
+                    <span>
+                      <Stamp size={22} />
+                    </span>
+                    <strong>Por visita</strong>
+                    <small>
+                      Otorga una cantidad fija de puntos en cada visita.
+                    </small>
+                  </button>
+                </div>
+
+                {form.pointsEarningMethod === 2 && (
+                  <label className="settings-toggle full-field">
+                    <input
+                      type="checkbox"
+                      checked={form.limitOneVisitPerDay}
+                      onChange={(event) =>
+                        updateField("limitOneVisitPerDay", event.target.checked)
+                      }
+                    />
+
+                    <span className="toggle-control" />
+
+                    <span>
+                      <strong>Limitar a una visita con puntos por día</strong>
+                      <br />
+                      <small>
+                        Evita que el cliente acumule puntos varias veces durante
+                        el mismo día local de la sucursal.
+                      </small>
+                    </span>
+                  </label>
+                )}
+              </div>
             )}
 
             <div className="settings-fields">
@@ -718,29 +1123,35 @@ export default function CardEditorPage() {
                 </label>
               ) : (
                 <>
-                  <label>
-                    <span>Por cada compra de</span>
-                    <div className="money-field">
-                      <b>$</b>
-                      <input
-                        type="number"
-                        min={0.01}
-                        step={0.01}
-                        value={form.amountRequired}
-                        onChange={(event) =>
-                          updateField(
-                            "amountRequired",
-                            Number(event.target.value),
-                          )
-                        }
-                        required
-                      />
-                      <small>MXN</small>
-                    </div>
-                  </label>
+                  {form.pointsEarningMethod === 1 && (
+                    <label>
+                      <span>Por cada compra de</span>
+                      <div className="money-field">
+                        <b>$</b>
+                        <input
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          value={form.amountRequired}
+                          onChange={(event) =>
+                            updateField(
+                              "amountRequired",
+                              Number(event.target.value),
+                            )
+                          }
+                          required
+                        />
+                        <small>MXN</small>
+                      </div>
+                    </label>
+                  )}
 
                   <label>
-                    <span>Puntos otorgados</span>
+                    <span>
+                      {form.pointsEarningMethod === 2
+                        ? "Puntos por visita"
+                        : "Puntos otorgados"}
+                    </span>
                     <input
                       type="number"
                       min={0.01}
@@ -766,8 +1177,9 @@ export default function CardEditorPage() {
                       required
                     />
                     <small className="field-help">
-                      Ejemplo: por cada ${form.amountRequired || 0} se otorgan{" "}
-                      {form.pointsEarned || 0} puntos.
+                      {form.pointsEarningMethod === 2
+                        ? `Cada visita otorgará ${form.pointsEarned || 0} puntos.`
+                        : `Por cada $${form.amountRequired || 0} MXN se otorgarán ${form.pointsEarned || 0} puntos.`}
                     </small>
                   </label>
                 </>
@@ -1019,6 +1431,92 @@ export default function CardEditorPage() {
                   </label>
                 </>
               )}
+
+              {isPointsProgram && (
+                <div className="full-field">
+                  <div className="settings-card-heading">
+                    <div>
+                      <h3>Diseño de la parte central</h3>
+                      <p>
+                        Usa una imagen para Wallet o conserva un bloque de
+                        color.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="program-type-grid">
+                    <button
+                      type="button"
+                      className={
+                        form.stripDesignMode === "image" ? "selected" : ""
+                      }
+                      onClick={() => updateField("stripDesignMode", "image")}
+                    >
+                      <span>
+                        <ImageIcon size={22} />
+                      </span>
+                      <strong>Usar imagen</strong>
+                      <small>PNG · mínimo 1125 × 432 px · máximo 3 MB.</small>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        form.stripDesignMode === "color" ? "selected" : ""
+                      }
+                      onClick={() => updateField("stripDesignMode", "color")}
+                    >
+                      <span>
+                        <Palette size={22} />
+                      </span>
+                      <strong>Usar color</strong>
+                      <small>Aplica un color sólido al área central.</small>
+                    </button>
+                  </div>
+
+                  {form.stripDesignMode === "image" ? (
+                    <label className="image-upload">
+                      <span>Imagen central</span>
+
+                      <div>
+                        {previews.stripImage ? (
+                          <img
+                            src={previews.stripImage}
+                            alt="Imagen central actual"
+                          />
+                        ) : (
+                          <ImageIcon size={24} />
+                        )}
+
+                        <strong>
+                          <Upload size={15} />
+                          {previews.stripImage ? "Cambiar" : "Seleccionar PNG"}
+                        </strong>
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/png"
+                        onChange={selectStripImage}
+                      />
+                    </label>
+                  ) : (
+                    <label>
+                      <span>Color de la parte central</span>
+                      <div className="color-input">
+                        <input
+                          type="color"
+                          value={form.cardStripColor}
+                          onChange={(event) =>
+                            updateField("cardStripColor", event.target.value)
+                          }
+                        />
+                        <strong>{form.cardStripColor}</strong>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* <label className="settings-toggle powered-toggle">
@@ -1059,6 +1557,11 @@ export default function CardEditorPage() {
               targetValue={form.targetValue}
               pointsEarned={form.pointsEarned}
               amountRequired={form.amountRequired}
+              pointsEarningMethod={form.pointsEarningMethod}
+              stripImageUrl={
+                form.stripDesignMode === "image" ? previews.stripImage : null
+              }
+              stripColor={form.cardStripColor}
               balance={isPointsProgram ? Math.min(form.targetValue, 40) : 4}
               rewardsAvailable={0}
               showPoweredByFidara={form.showPoweredByFidara}

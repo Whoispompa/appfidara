@@ -15,6 +15,9 @@ type WalletCardPreviewProps = {
   targetValue: number;
   pointsEarned?: number;
   amountRequired?: number;
+  pointsEarningMethod?: number;
+  stripImageUrl?: string | null;
+  stripColor?: string | null;
   balance?: number;
   rewardsAvailable?: number;
   showPoweredByFidara: boolean;
@@ -34,6 +37,9 @@ export function WalletCardPreview({
   targetValue,
   pointsEarned = 1,
   amountRequired = 10,
+  pointsEarningMethod = 1,
+  stripImageUrl,
+  stripColor = "#14532d",
   balance = 4,
   rewardsAvailable = 0,
   showPoweredByFidara,
@@ -65,7 +71,19 @@ export function WalletCardPreview({
       </div>
 
       {isPointsProgram ? (
-        <div className="wallet-points-preview">
+        <div
+          className="wallet-points-preview"
+          style={{
+            backgroundColor: stripImageUrl
+              ? undefined
+              : stripColor || "#14532d",
+            backgroundImage: stripImageUrl
+              ? `linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22)), url("${stripImageUrl}")`
+              : undefined,
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+          }}
+        >
           <span className="wallet-points-icon" aria-hidden="true">
             <Coins size={compact ? 20 : 28} />
           </span>
@@ -76,7 +94,9 @@ export function WalletCardPreview({
             </small>
             <strong>{previewBalance.toLocaleString("es-MX")} puntos</strong>
             <span>
-              {Number(pointsEarned) || 0} puntos por cada ${Number(amountRequired || 0).toLocaleString("es-MX")} MXN
+              {pointsEarningMethod === 2
+                ? `${Number(pointsEarned) || 0} puntos por visita`
+                : `${Number(pointsEarned) || 0} puntos por cada $${Number(amountRequired || 0).toLocaleString("es-MX")} MXN`}
             </span>
           </div>
 

@@ -69,9 +69,17 @@ type CardInformation = {
     targetValue?: number | null;
     pointsEarned?: number | null;
     amountRequired?: number | null;
+    pointsEarningMethod?: number | null;
+    limitOneVisitPerDay?: boolean;
     logoUrl?: string | null;
     backgroundColor?: string | null;
     foregroundColor?: string | null;
+    labelColor?: string | null;
+    cardStripImageUrl?: string | null;
+    cardStripColor?: string | null;
+    activeStampImageUrl?: string | null;
+    inactiveStampImageUrl?: string | null;
+    showPoweredByFidara?: boolean;
   };
   organization: {
     id: string;
@@ -103,6 +111,9 @@ type CardInformation = {
   walletPlatform?: string | null;
   walletInstalledAt?: string | null;
   walletSerialNumber?: string | null;
+  checkedInToday?: boolean;
+  nextVisitAvailableAt?: string | null;
+  visitTimeZone?: string | null;
 };
 
 type ApiPayload = {
@@ -117,6 +128,7 @@ type ApiPayload = {
   programType?: number;
   earnedAmount?: number;
   earnedUnit?: "stamps" | "points";
+  code?: string;
   reward?: CardInformation["reward"];
 };
 
@@ -173,17 +185,28 @@ export default function ScannerPage() {
 
   const isPointsProgram = card?.program.programType === 2;
 
+  const isSpendPointsProgram =
+    isPointsProgram && card?.program.pointsEarningMethod === 1;
+
+  const isVisitPointsProgram =
+    isPointsProgram && card?.program.pointsEarningMethod === 2;
+
   const estimatedPoints = useMemo(() => {
-    if (!card || card.program.programType !== 2) return 0;
+    if (!card || !isPointsProgram) return 0;
+
+    const pointsEarned = Number(card.program.pointsEarned ?? 0);
+
+    if (isVisitPointsProgram) {
+      return Math.max(pointsEarned, 0);
+    }
 
     const amount = Number(purchaseAmount);
     const amountRequired = Number(card.program.amountRequired ?? 0);
-    const pointsEarned = Number(card.program.pointsEarned ?? 0);
 
     if (amount <= 0 || amountRequired <= 0 || pointsEarned <= 0) return 0;
 
     return Math.floor(amount / amountRequired) * pointsEarned;
-  }, [card, purchaseAmount]);
+  }, [card, isPointsProgram, isVisitPointsProgram, purchaseAmount]);
 
   const walletInstalled = useMemo(() => {
     if (!card) return false;
@@ -260,13 +283,21 @@ export default function ScannerPage() {
 
     const numericPurchaseAmount = Number(purchaseAmount);
 
-    if (!Number.isFinite(numericPurchaseAmount) || numericPurchaseAmount <= 0) {
+    if (
+      isSpendPointsProgram &&
+      (!Number.isFinite(numericPurchaseAmount) || numericPurchaseAmount <= 0)
+    ) {
       toast.error("Total de compra inválido", {
         description:
-          "Ingresa un importe mayor a cero antes de registrar la compra.",
+          "Ingresa un importe mayor a cero para calcular los puntos.",
       });
       return;
     }
+
+    const validPurchaseAmount =
+      Number.isFinite(numericPurchaseAmount) && numericPurchaseAmount > 0
+        ? numericPurchaseAmount
+        : null;
 
     setAddingStamp(true);
 
@@ -276,7 +307,7 @@ export default function ScannerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           qrToken,
-          purchaseAmount: numericPurchaseAmount,
+          purchaseAmount: validPurchaseAmount,
           idempotencyKey: crypto.randomUUID(),
         }),
       });
@@ -307,32 +338,50 @@ export default function ScannerPage() {
               ),
               totalSpent: Number(
                 payload.totalSpent ??
-                  (current.totalSpent ?? 0) + numericPurchaseAmount,
+                  (current.totalSpent ?? 0) + (validPurchaseAmount ?? 0),
               ),
               purchaseCount: Number(
-                payload.purchaseCount ?? (current.purchaseCount ?? 0) + 1,
+                payload.purchaseCount ??
+                  (current.purchaseCount ?? 0) +
+                    (validPurchaseAmount === null ? 0 : 1),
               ),
               lifetimeEarned:
                 (current.lifetimeEarned ?? current.balance) + earnedAmount,
               transactionCount: (current.transactionCount ?? 0) + 1,
-              lastPurchaseAmount: numericPurchaseAmount,
-              lastPurchaseAt: new Date().toISOString(),
+              lastPurchaseAmount:
+                validPurchaseAmount ?? current.lastPurchaseAmount,
+              lastPurchaseAt:
+                validPurchaseAmount === null
+                  ? current.lastPurchaseAt
+                  : new Date().toISOString(),
+              checkedInToday: isVisitPointsProgram
+                ? true
+                : current.checkedInToday,
             }
           : current,
       );
 
       setPurchaseAmount("");
 
-      toast.success(isPointsProgram ? "Puntos agregados" : "Sello agregado", {
-        description: isPointsProgram
-          ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
-          : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
-      });
+      toast.success(
+        isVisitPointsProgram
+          ? "Visita registrada"
+          : isPointsProgram
+            ? "Puntos agregados"
+            : "Sello agregado",
+        {
+          description: isPointsProgram
+            ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
+            : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
+        },
+      );
     } catch (caught) {
       toast.error(
-        isPointsProgram
-          ? "No se pudieron agregar los puntos"
-          : "No se pudo agregar el sello",
+        isVisitPointsProgram
+          ? "No se pudo registrar la visita"
+          : isPointsProgram
+            ? "No se pudieron agregar los puntos"
+            : "No se pudo agregar el sello",
         {
           description: getErrorMessage(
             caught,
@@ -625,11 +674,11 @@ export default function ScannerPage() {
                       puntos para la meta
                     </span>
                     <span>
-                      {card.program.pointsEarned ?? 0} puntos por cada $
-                      {Number(card.program.amountRequired ?? 0).toLocaleString(
-                        "es-MX",
-                      )}{" "}
-                      MXN
+                      {isVisitPointsProgram
+                        ? `${card.program.pointsEarned ?? 0} puntos por visita`
+                        : `${card.program.pointsEarned ?? 0} puntos por cada $${Number(
+                            card.program.amountRequired ?? 0,
+                          ).toLocaleString("es-MX")} MXN`}
                     </span>
                   </div>
                 </div>
@@ -692,13 +741,33 @@ export default function ScannerPage() {
                 </div>
               )}
 
+              {isVisitPointsProgram &&
+                card.program.limitOneVisitPerDay &&
+                card.checkedInToday && (
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm">
+                      <Check size={19} />
+                    </span>
+                    <div>
+                      <strong className="block text-sm">
+                        Visita registrada hoy
+                      </strong>
+                      <span className="text-sm opacity-75">
+                        Este cliente podrá volver a acumular puntos mañana.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
               {(!card.rewardAvailable || isPointsProgram) && (
                 <div className="mt-5">
                   <Label
                     htmlFor="purchaseAmount"
                     className="font-bold text-[#111827]"
                   >
-                    Total de la compra
+                    {isVisitPointsProgram
+                      ? "Total de la compra (opcional)"
+                      : "Total de la compra"}
                   </Label>
                   <div className="relative mt-2">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-extrabold text-[#111827]">
@@ -722,9 +791,11 @@ export default function ScannerPage() {
                     </small>
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    {isPointsProgram && estimatedPoints > 0
-                      ? `Esta compra generará ${estimatedPoints} puntos.`
-                      : "Se registrará en el historial de compras del cliente."}
+                    {isVisitPointsProgram
+                      ? "El total de la compra es opcional para registrar la visita."
+                      : isSpendPointsProgram && estimatedPoints > 0
+                        ? `Esta compra generará ${estimatedPoints} puntos.`
+                        : "Se registrará en el historial de compras del cliente."}
                   </p>
                 </div>
               )}
@@ -746,7 +817,11 @@ export default function ScannerPage() {
                     type="button"
                     className="h-11 rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
                     disabled={
-                      addingStamp || (isPointsProgram && estimatedPoints <= 0)
+                      addingStamp ||
+                      (isSpendPointsProgram && estimatedPoints <= 0) ||
+                      (isVisitPointsProgram &&
+                        Boolean(card.program.limitOneVisitPerDay) &&
+                        Boolean(card.checkedInToday))
                     }
                     onClick={addStamp}
                   >
@@ -758,14 +833,21 @@ export default function ScannerPage() {
                       <Stamp className="mr-2 size-5" />
                     )}
                     {addingStamp
-                      ? isPointsProgram
-                        ? "Agregando puntos…"
-                        : "Agregando sello…"
-                      : isPointsProgram
-                        ? estimatedPoints > 0
-                          ? `Agregar ${estimatedPoints} puntos`
-                          : "Ingresa una compra válida"
-                        : "Agregar 1 sello"}
+                      ? isVisitPointsProgram
+                        ? "Registrando visita…"
+                        : isPointsProgram
+                          ? "Agregando puntos…"
+                          : "Agregando sello…"
+                      : isVisitPointsProgram
+                        ? card.program.limitOneVisitPerDay &&
+                          card.checkedInToday
+                          ? "Visita registrada hoy"
+                          : `Registrar visita · +${estimatedPoints} puntos`
+                        : isSpendPointsProgram
+                          ? estimatedPoints > 0
+                            ? `Agregar ${estimatedPoints} puntos`
+                            : "Ingresa una compra válida"
+                          : "Agregar 1 sello"}
                   </Button>
                 )}
               </div>

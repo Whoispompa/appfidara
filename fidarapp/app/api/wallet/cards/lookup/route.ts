@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
-
-export const dynamic = "force-dynamic";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 const apiUrl = (
   process.env.FIDARA_API_URL ??
@@ -11,76 +12,84 @@ const apiUrl = (
 export async function POST(
   request: NextRequest,
 ) {
-  try {
-    const cookieStore = await cookies();
+  const cookieStore =
+    await cookies();
 
-    const token =
-      cookieStore.get("fidara_token")?.value;
+  const token =
+    cookieStore.get(
+      "fidara_token",
+    )?.value;
 
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Tu sesión ha expirado.",
-        },
-        {
-          status: 401,
-        },
-      );
-    }
+  const locationId =
+    cookieStore.get(
+      "fidara_location_id",
+    )?.value;
 
-    const body = await request.json();
-
-    const upstreamUrl =
-      `${apiUrl}/api/wallet/cards/lookup`;
-
-    console.log(
-      "[wallet/lookup] API destino:",
-      upstreamUrl,
-    );
-
-    const upstream = await fetch(
-      upstreamUrl,
+  if (!token) {
+    return NextResponse.json(
       {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: JSON.stringify(body),
-        cache: "no-store",
+        success: false,
+        message:
+          "Tu sesión ha expirado.",
+      },
+      {
+        status: 401,
       },
     );
+  }
 
-    const rawResponse = await upstream.text();
+  if (!locationId) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "LOCATION_REQUIRED",
+        message:
+          "Debes seleccionar una sucursal antes de escanear una tarjeta.",
+      },
+      {
+        status: 409,
+      },
+    );
+  }
 
-    let payload: {
-      success?: boolean;
-      message?: string;
-      [key: string]: unknown;
-    };
+  try {
+    const body =
+      await request.json();
+
+    const upstream =
+      await fetch(
+        `${apiUrl}/api/wallet/cards/lookup`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          body: JSON.stringify({
+            ...body,
+            locationId,
+          }),
+
+          cache: "no-store",
+        },
+      );
+
+    const rawResponse =
+      await upstream.text();
+
+    let payload:
+      Record<string, unknown>;
 
     try {
       payload = rawResponse
         ? JSON.parse(rawResponse)
-        : {
-            success: false,
-            message:
-              "La API respondió sin contenido.",
-          };
+        : {};
     } catch {
-      console.error(
-        "[wallet/lookup] Respuesta no válida:",
-        {
-          url: upstreamUrl,
-          status: upstream.status,
-          statusText: upstream.statusText,
-          response: rawResponse,
-        },
-      );
-
       payload = {
         success: false,
         message:
@@ -88,21 +97,11 @@ export async function POST(
       };
     }
 
-    if (!upstream.ok) {
-      console.error(
-        "[wallet/lookup] Error de la API:",
-        {
-          url: upstreamUrl,
-          status: upstream.status,
-          payload,
-        },
-      );
-    }
-
     return NextResponse.json(
       payload,
       {
         status: upstream.status,
+
         headers: {
           "Cache-Control":
             "no-store, no-cache, must-revalidate",
@@ -111,7 +110,7 @@ export async function POST(
     );
   } catch (error) {
     console.error(
-      "[wallet/lookup] Error del proxy:",
+      "[wallet/lookup] Error:",
       error,
     );
 

@@ -6452,3 +6452,783 @@ body {
     grid-column: auto;
   }
 }
+/* =========================================================
+   PROGRAMAS DE SELLOS Y PUNTOS
+   Agregar al final de app/globals.css
+========================================================= */
+
+.program-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.program-type-grid button {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 17px;
+  border: 1px solid #e4ded9;
+  border-radius: 15px;
+  background: #fff;
+  color: #403a36;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.program-type-grid button:hover:not(:disabled) {
+  border-color: #ef4f59;
+  box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
+}
+
+.program-type-grid button.selected {
+  border-color: #ef4f59;
+  background: #fff6f7;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
+}
+
+.program-type-grid button:disabled {
+  cursor: default;
+}
+
+.program-type-grid button > span {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff0f2;
+  color: #ef4f59;
+}
+
+.program-type-grid strong {
+  color: #171514;
+  font-size: 0.92rem;
+}
+
+.program-type-grid small,
+.program-type-note,
+.field-help {
+  color: #857d77;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.program-type-note {
+  margin: -8px 0 18px;
+}
+
+.points-earning-settings {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 22px;
+  padding: 18px;
+  border: 1px solid #eee8e4;
+  border-radius: 16px;
+  background: #fcfaf8;
+}
+
+.points-earning-settings .settings-card-heading,
+.image-upload-grid > .full-field .settings-card-heading {
+  margin: 0;
+}
+
+.points-earning-settings .program-type-grid,
+.image-upload-grid > .full-field .program-type-grid {
+  margin-bottom: 0;
+}
+
+.points-earning-settings .settings-toggle {
+  margin-top: 0;
+}
+
+.image-upload-grid > .full-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 16px;
+  min-width: 0;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid #eee8e4;
+}
+
+.image-upload-grid > .full-field > .image-upload {
+  width: 100%;
+  min-height: 150px;
+}
+
+.image-upload-grid > .full-field > label:not(.image-upload) {
+  display: grid;
+  max-width: 310px;
+  gap: 8px;
+  color: #171514;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-fields select,
+.reward-fields select {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 38px 0 13px;
+  border: 1px solid #ddd6d1;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: #171514;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.settings-fields select:focus,
+.reward-fields select:focus {
+  border-color: #ef4f59;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
+}
+
+.money-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.money-field b {
+  position: absolute;
+  left: 13px;
+  z-index: 1;
+  color: #171514;
+}
+
+.money-field b + input {
+  padding-left: 31px;
+}
+
+.money-field small {
+  position: absolute;
+  right: 13px;
+  color: #857d77;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.money-field input {
+  padding-right: 52px;
+}
+
+.wallet-points-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 13px;
+  margin: 24px 0 28px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  min-height: 150px;
+  align-content: center;
+  overflow: hidden;
+}
+
+.wallet-points-icon {
+  display: grid;
+  width: 45px;
+  height: 45px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.wallet-points-copy {
+  min-width: 0;
+}
+
+.wallet-points-copy small,
+.wallet-points-copy span {
+  display: block;
+}
+
+.wallet-points-copy small {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.wallet-points-copy strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.65rem;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.wallet-points-copy span {
+  margin-top: 6px;
+  font-size: 0.68rem;
+  opacity: 0.78;
+}
+
+.wallet-points-progress {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.wallet-points-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms ease;
+}
+
+.wallet-card-preview.compact .wallet-points-preview {
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-copy strong {
+  font-size: 1.05rem;
+}
+
+.wallet-card-preview.compact .wallet-points-copy span {
+  font-size: 0.55rem;
+}
+
+@media (max-width: 680px) {
+  .program-type-grid,
+  .reward-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .full-field {
+    grid-column: auto;
+  }
+}
+/* =========================================================
+   PROGRAMAS DE SELLOS Y PUNTOS
+   Agregar al final de app/globals.css
+========================================================= */
+
+.card-type-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 28px;
+  background: rgba(24, 20, 18, 0.46);
+  backdrop-filter: blur(8px);
+}
+
+.card-type-modal {
+  width: min(940px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(228, 222, 217, 0.9);
+  border-radius: 24px;
+  background: #fbf9f7;
+  box-shadow: 0 32px 90px rgba(35, 27, 23, 0.24);
+}
+
+.card-type-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.card-type-modal-heading h2 {
+  margin: 7px 0 7px;
+  color: #171514;
+  font-size: clamp(1.75rem, 4vw, 2.55rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.card-type-modal-heading p,
+.card-type-modal-note {
+  margin: 0;
+  color: #776e68;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.card-type-modal-close {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e5dfda;
+  border-radius: 13px;
+  background: #fff;
+  color: #4b4541;
+  cursor: pointer;
+}
+
+.card-type-modal-close:hover {
+  border-color: #ef4f59;
+  color: #ef4f59;
+}
+
+.card-type-catalog {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card-type-option {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 178px;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #e5dfda;
+  border-radius: 17px;
+  background: #fff;
+  color: #171514;
+  text-align: left;
+}
+
+.card-type-option.available {
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease,
+    box-shadow 150ms ease, background 150ms ease;
+}
+
+.card-type-option.available:hover {
+  transform: translateY(-2px);
+  border-color: #ef4f59;
+  background: #fff8f8;
+  box-shadow: 0 14px 32px rgba(239, 79, 89, 0.12);
+}
+
+.card-type-option.upcoming {
+  background: #f5f2ef;
+  color: #7f7771;
+  cursor: not-allowed;
+}
+
+.card-type-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff0f2;
+  color: #ef4f59;
+}
+
+.card-type-option.upcoming .card-type-icon {
+  background: #ebe6e2;
+  color: #9b928b;
+}
+
+.card-type-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.card-type-copy strong {
+  font-size: 0.96rem;
+}
+
+.card-type-copy small {
+  color: #7d746e;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.card-type-status {
+  width: max-content;
+  margin-top: auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e9e4e0;
+  color: #776f69;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.card-type-status.available {
+  background: #e8faf2;
+  color: #087a55;
+}
+
+.card-type-modal-note {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.selected-program-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid #e8e1dc;
+  border-radius: 15px;
+  background: #fcfaf8;
+}
+
+.selected-program-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  background: #fff0f2;
+  color: #ef4f59;
+}
+
+.selected-program-summary > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.selected-program-summary small {
+  color: #847b75;
+  font-size: 0.7rem;
+}
+
+.selected-program-summary strong {
+  color: #171514;
+  font-size: 0.9rem;
+}
+
+.selected-program-summary button {
+  padding: 8px 11px;
+  border: 1px solid #e1dad5;
+  border-radius: 10px;
+  background: #fff;
+  color: #ef4f59;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.selected-program-summary button:hover {
+  border-color: #ef4f59;
+}
+
+.selected-program-locked {
+  max-width: 150px;
+  text-align: right;
+}
+
+.program-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.program-type-grid button {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 17px;
+  border: 1px solid #e4ded9;
+  border-radius: 15px;
+  background: #fff;
+  color: #403a36;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.program-type-grid button:hover:not(:disabled) {
+  border-color: #ef4f59;
+  box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
+}
+
+.program-type-grid button.selected {
+  border-color: #ef4f59;
+  background: #fff6f7;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
+}
+
+.program-type-grid button:disabled {
+  cursor: default;
+}
+
+.program-type-grid button > span {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff0f2;
+  color: #ef4f59;
+}
+
+.program-type-grid strong {
+  color: #171514;
+  font-size: 0.92rem;
+}
+
+.program-type-grid small,
+.program-type-note,
+.field-help {
+  color: #857d77;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.program-type-note {
+  margin: -8px 0 18px;
+}
+
+.points-earning-settings {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 22px;
+  padding: 18px;
+  border: 1px solid #eee8e4;
+  border-radius: 16px;
+  background: #fcfaf8;
+}
+
+.points-earning-settings .settings-card-heading,
+.image-upload-grid > .full-field .settings-card-heading {
+  margin: 0;
+}
+
+.points-earning-settings .program-type-grid,
+.image-upload-grid > .full-field .program-type-grid {
+  margin-bottom: 0;
+}
+
+.points-earning-settings .settings-toggle {
+  margin-top: 0;
+}
+
+.image-upload-grid > .full-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 16px;
+  min-width: 0;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid #eee8e4;
+}
+
+.image-upload-grid > .full-field > .image-upload {
+  width: 100%;
+  min-height: 150px;
+}
+
+.image-upload-grid > .full-field > label:not(.image-upload) {
+  display: grid;
+  max-width: 310px;
+  gap: 8px;
+  color: #171514;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-fields select,
+.reward-fields select {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 38px 0 13px;
+  border: 1px solid #ddd6d1;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: #171514;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.settings-fields select:focus,
+.reward-fields select:focus {
+  border-color: #ef4f59;
+  box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
+}
+
+.money-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.money-field b {
+  position: absolute;
+  left: 13px;
+  z-index: 1;
+  color: #171514;
+}
+
+.money-field b + input {
+  padding-left: 31px;
+}
+
+.money-field small {
+  position: absolute;
+  right: 13px;
+  color: #857d77;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.money-field input {
+  padding-right: 52px;
+}
+
+.wallet-points-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 13px;
+  margin: 24px 0 28px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  min-height: 150px;
+  align-content: center;
+  overflow: hidden;
+}
+
+.wallet-points-icon {
+  display: grid;
+  width: 45px;
+  height: 45px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.wallet-points-copy {
+  min-width: 0;
+}
+
+.wallet-points-copy small,
+.wallet-points-copy span {
+  display: block;
+}
+
+.wallet-points-copy small {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.wallet-points-copy strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.65rem;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.wallet-points-copy span {
+  margin-top: 6px;
+  font-size: 0.68rem;
+  opacity: 0.78;
+}
+
+.wallet-points-progress {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.wallet-points-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms ease;
+}
+
+.wallet-card-preview.compact .wallet-points-preview {
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.wallet-card-preview.compact .wallet-points-copy strong {
+  font-size: 1.05rem;
+}
+
+.wallet-card-preview.compact .wallet-points-copy span {
+  font-size: 0.55rem;
+}
+
+@media (max-width: 680px) {
+  .card-type-modal-backdrop {
+    align-items: start;
+    padding: 14px;
+  }
+
+  .card-type-modal {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .card-type-catalog {
+    grid-template-columns: 1fr;
+  }
+
+  .card-type-option {
+    min-height: 0;
+  }
+
+  .selected-program-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .selected-program-summary button,
+  .selected-program-locked {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: none;
+    text-align: center;
+  }
+
+  .program-type-grid,
+  .reward-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .full-field {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 681px) and (max-width: 960px) {
+  .card-type-catalog {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
