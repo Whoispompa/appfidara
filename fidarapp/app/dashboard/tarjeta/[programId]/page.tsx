@@ -71,9 +71,9 @@ type ProgramForm = {
   programType: number;
   name: string;
   description: string;
-  targetValue: number;
-  pointsEarned: number;
-  amountRequired: number;
+  targetValue: string;
+  pointsEarned: string;
+  amountRequired: string;
   pointsEarningMethod: number;
   limitOneVisitPerDay: boolean;
   isRecurring: boolean;
@@ -86,7 +86,7 @@ type ProgramForm = {
   rewardName: string;
   rewardDescription: string;
   rewardType: number;
-  rewardValue: number;
+  rewardValue: string;
 };
 
 type ImageFiles = {
@@ -122,13 +122,21 @@ function absoluteUrl(value?: string | null) {
   return `${apiUrl}${value}`;
 }
 
+function normalizeNumericInput(value: string) {
+  if (value === "") {
+    return "";
+  }
+
+  return value.replace(/^0+(?=\d)/, "");
+}
+
 const initialForm: ProgramForm = {
   programType: 1,
   name: "",
   description: "",
-  targetValue: 10,
-  pointsEarned: 1,
-  amountRequired: 10,
+  targetValue: "10",
+  pointsEarned: "1",
+  amountRequired: "10",
   pointsEarningMethod: 1,
   limitOneVisitPerDay: false,
   isRecurring: true,
@@ -141,7 +149,7 @@ const initialForm: ProgramForm = {
   rewardName: "",
   rewardDescription: "",
   rewardType: 1,
-  rewardValue: 0,
+  rewardValue: "0",
 };
 
 const emptyProgram: ProgramInformation = {
@@ -291,11 +299,11 @@ export default function CardEditorPage() {
         name: data.name,
         description: data.description ?? "",
 
-        targetValue: Number(data.targetValue),
+        targetValue: String(data.targetValue ?? 10),
 
-        pointsEarned: Number(data.pointsEarned ?? 1),
+        pointsEarned: String(data.pointsEarned ?? 1),
 
-        amountRequired: Number(data.amountRequired ?? 10),
+        amountRequired: String(data.amountRequired ?? 10),
 
         pointsEarningMethod: Number(data.pointsEarningMethod ?? 1),
 
@@ -321,7 +329,7 @@ export default function CardEditorPage() {
 
         rewardType: Number(data.reward?.rewardType ?? 1),
 
-        rewardValue: Number(data.reward?.rewardValue ?? 0),
+        rewardValue: String(data.reward?.rewardValue ?? 0),
       });
 
       setPreviews({
@@ -364,9 +372,9 @@ export default function CardEditorPage() {
     setForm((current) => ({
       ...current,
       programType,
-      targetValue: programType === 1 ? 10 : 100,
-      pointsEarned: programType === 1 ? 1 : current.pointsEarned || 1,
-      amountRequired: programType === 1 ? 10 : current.amountRequired || 10,
+      targetValue: programType === 1 ? "10" : "100",
+      pointsEarned: programType === 1 ? "1" : current.pointsEarned || "1",
+      amountRequired: programType === 1 ? "10" : current.amountRequired || "10",
       pointsEarningMethod:
         programType === 1 ? 1 : current.pointsEarningMethod || 1,
       limitOneVisitPerDay:
@@ -524,6 +532,14 @@ export default function CardEditorPage() {
       return;
     }
 
+    const targetValue = Number(form.targetValue);
+
+    const pointsEarned = Number(form.pointsEarned);
+
+    const amountRequired = Number(form.amountRequired);
+
+    const rewardValue = Number(form.rewardValue || "0");
+
     if (!form.name.trim()) {
       setError("El nombre del programa es obligatorio.");
 
@@ -538,9 +554,9 @@ export default function CardEditorPage() {
 
     if (isStampProgram) {
       if (
-        !Number.isInteger(form.targetValue) ||
-        form.targetValue < 1 ||
-        form.targetValue > 20
+        !Number.isInteger(targetValue) ||
+        targetValue < 1 ||
+        targetValue > 20
       ) {
         setError("La meta debe ser un número entero entre 1 y 20 sellos.");
         return;
@@ -548,19 +564,23 @@ export default function CardEditorPage() {
     }
 
     if (isPointsProgram) {
-      if (form.targetValue <= 0) {
+      if (!Number.isFinite(targetValue) || targetValue <= 0) {
         setError(
           "Los puntos necesarios para la recompensa deben ser mayores a cero.",
         );
         return;
       }
 
-      if (form.pointsEarned <= 0) {
+      if (!Number.isFinite(pointsEarned) || pointsEarned <= 0) {
         setError("Los puntos otorgados deben ser mayores a cero.");
+
         return;
       }
 
-      if (form.pointsEarningMethod === 1 && form.amountRequired <= 0) {
+      if (
+        form.pointsEarningMethod === 1 &&
+        (!Number.isFinite(amountRequired) || amountRequired <= 0)
+      ) {
         setError(
           "El importe necesario para generar puntos debe ser mayor a cero.",
         );
@@ -570,14 +590,19 @@ export default function CardEditorPage() {
 
     if (
       form.rewardType === 3 &&
-      (form.rewardValue <= 0 || form.rewardValue > 100)
+      (!Number.isFinite(rewardValue) || rewardValue <= 0 || rewardValue > 100)
     ) {
       setError("El porcentaje de descuento debe estar entre 1 y 100.");
+
       return;
     }
 
-    if (form.rewardType === 2 && form.rewardValue <= 0) {
+    if (
+      form.rewardType === 2 &&
+      (!Number.isFinite(rewardValue) || rewardValue <= 0)
+    ) {
       setError("El valor del descuento debe ser mayor a cero.");
+
       return;
     }
 
@@ -594,10 +619,10 @@ export default function CardEditorPage() {
 
       formData.append("ProgramType", String(form.programType));
 
-      formData.append("TargetValue", String(form.targetValue));
+      formData.append("TargetValue", String(targetValue));
 
       if (isPointsProgram) {
-        formData.append("PointsEarned", String(form.pointsEarned));
+        formData.append("PointsEarned", String(pointsEarned));
         formData.append(
           "PointsEarningMethod",
           String(form.pointsEarningMethod),
@@ -609,12 +634,16 @@ export default function CardEditorPage() {
         formData.append("CardStripColor", form.cardStripColor);
 
         if (form.pointsEarningMethod === 1) {
-          formData.append("AmountRequired", String(form.amountRequired));
+          formData.append("AmountRequired", String(amountRequired));
         }
 
         if (form.stripDesignMode === "image" && files.stripImage) {
           formData.append("StripImage", files.stripImage);
         }
+        formData.append(
+          "RemoveStripImage",
+          String(form.stripDesignMode === "color"),
+        );
       }
 
       formData.append("IsRecurring", String(form.isRecurring));
@@ -634,7 +663,7 @@ export default function CardEditorPage() {
       formData.append("RewardType", String(form.rewardType));
 
       if (form.rewardType === 2 || form.rewardType === 3) {
-        formData.append("RewardValue", String(form.rewardValue));
+        formData.append("RewardValue", String(rewardValue));
       }
 
       if (files.logo) {
@@ -1026,8 +1055,8 @@ export default function CardEditorPage() {
                     onClick={() => {
                       updateField("pointsEarningMethod", 2);
 
-                      if (form.pointsEarned === 1) {
-                        updateField("pointsEarned", 10);
+                      if (Number(form.pointsEarned) === 1) {
+                        updateField("pointsEarned", "10");
                       }
                     }}
                   >
@@ -1116,7 +1145,10 @@ export default function CardEditorPage() {
                     step={1}
                     value={form.targetValue}
                     onChange={(event) =>
-                      updateField("targetValue", Number(event.target.value))
+                      updateField(
+                        "targetValue",
+                        normalizeNumericInput(event.target.value),
+                      )
                     }
                     required
                   />
@@ -1136,7 +1168,7 @@ export default function CardEditorPage() {
                           onChange={(event) =>
                             updateField(
                               "amountRequired",
-                              Number(event.target.value),
+                              normalizeNumericInput(event.target.value),
                             )
                           }
                           required
@@ -1158,7 +1190,10 @@ export default function CardEditorPage() {
                       step={0.01}
                       value={form.pointsEarned}
                       onChange={(event) =>
-                        updateField("pointsEarned", Number(event.target.value))
+                        updateField(
+                          "pointsEarned",
+                          normalizeNumericInput(event.target.value),
+                        )
                       }
                       required
                     />
@@ -1172,7 +1207,10 @@ export default function CardEditorPage() {
                       step={1}
                       value={form.targetValue}
                       onChange={(event) =>
-                        updateField("targetValue", Number(event.target.value))
+                        updateField(
+                          "targetValue",
+                          normalizeNumericInput(event.target.value),
+                        )
                       }
                       required
                     />
@@ -1229,7 +1267,10 @@ export default function CardEditorPage() {
                       step={0.01}
                       value={form.rewardValue}
                       onChange={(event) =>
-                        updateField("rewardValue", Number(event.target.value))
+                        updateField(
+                          "rewardValue",
+                          normalizeNumericInput(event.target.value),
+                        )
                       }
                       required
                     />
@@ -1431,8 +1472,6 @@ export default function CardEditorPage() {
                   </label>
                 </>
               )}
-
-              {isPointsProgram && (
                 <div className="full-field">
                   <div className="settings-card-heading">
                     <div>
@@ -1516,7 +1555,6 @@ export default function CardEditorPage() {
                     </label>
                   )}
                 </div>
-              )}
             </div>
 
             {/* <label className="settings-toggle powered-toggle">
@@ -1554,15 +1592,19 @@ export default function CardEditorPage() {
               backgroundColor={form.cardBackgroundColor}
               foregroundColor={form.cardForegroundColor}
               labelColor={form.cardLabelColor}
-              targetValue={form.targetValue}
-              pointsEarned={form.pointsEarned}
-              amountRequired={form.amountRequired}
+              targetValue={Number(form.targetValue) || 0}
+              pointsEarned={Number(form.pointsEarned) || 0}
+              amountRequired={Number(form.amountRequired) || 0}
               pointsEarningMethod={form.pointsEarningMethod}
               stripImageUrl={
                 form.stripDesignMode === "image" ? previews.stripImage : null
               }
               stripColor={form.cardStripColor}
-              balance={isPointsProgram ? Math.min(form.targetValue, 40) : 4}
+              balance={
+                isPointsProgram
+                  ? Math.min(Number(form.targetValue) || 0, 40)
+                  : 4
+              }
               rewardsAvailable={0}
               showPoweredByFidara={form.showPoweredByFidara}
             />
