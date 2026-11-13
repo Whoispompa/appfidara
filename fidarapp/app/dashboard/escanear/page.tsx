@@ -21,6 +21,7 @@ import {
   Stamp,
   UserRound,
   WalletCards,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -71,6 +72,11 @@ type CardInformation = {
     amountRequired?: number | null;
     pointsEarningMethod?: number | null;
     limitOneVisitPerDay?: boolean;
+    cashbackEarningMethod?: number | null;
+    cashbackPercentage?: number | null;
+    cashbackAmount?: number | null;
+    cashbackAmountRequired?: number | null;
+    minimumCashbackRedemption?: number | null;
     logoUrl?: string | null;
     backgroundColor?: string | null;
     foregroundColor?: string | null;
@@ -90,6 +96,10 @@ type CardInformation = {
   target: number;
   remaining: number;
   rewardAvailable: boolean;
+  cashbackAvailable?: boolean;
+  cashbackBalance?: number | null;
+  minimumCashbackRedemption?: number | null;
+  balanceUnit?: "stamps" | "points" | "cashback";
   reward?: {
     id: string;
     name: string;
@@ -104,6 +114,8 @@ type CardInformation = {
   totalSpent?: number;
   purchaseCount?: number;
   lastPurchaseAmount?: number | null;
+  lastGrossPurchaseAmount?: number | null;
+  lastCashbackApplied?: number | null;
   lastPurchaseAt?: string | null;
   activatedAt?: string | null;
   lastActivityAt?: string | null;
@@ -123,11 +135,21 @@ type ApiPayload = {
   balance?: number;
   target?: number;
   rewardAvailable?: boolean;
+  cashbackAvailable?: boolean;
+  cashbackBalance?: number | null;
+  minimumCashbackRedemption?: number | null;
+  amountDue?: number;
+  operationId?: string;
+  grossPurchaseAmount?: number;
+  purchaseAmount?: number;
+  cashbackRedeemed?: number;
+  cashbackEarned?: number;
+  balanceAfterRedemption?: number;
   totalSpent?: number;
   purchaseCount?: number;
   programType?: number;
   earnedAmount?: number;
-  earnedUnit?: "stamps" | "points";
+  earnedUnit?: "stamps" | "points" | "cashback";
   code?: string;
   reward?: CardInformation["reward"];
 };
@@ -176,6 +198,8 @@ export default function ScannerPage() {
   const [addingStamp, setAddingStamp] = useState(false);
   const [redeemDialogOpen, setRedeemDialogOpen] = useState(false);
   const [redeemingReward, setRedeemingReward] = useState(false);
+  const [cashbackToRedeem, setCashbackToRedeem] = useState("");
+  const [useCashback, setUseCashback] = useState(false);
   const [card, setCard] = useState<CardInformation | null>(null);
 
   const brandLogoUrl = useMemo(
@@ -184,6 +208,27 @@ export default function ScannerPage() {
   );
 
   const isPointsProgram = card?.program.programType === 2;
+
+  const isCashbackProgram = card?.program.programType === 3;
+
+  const cashbackMinimumToUse = Number(
+    card?.minimumCashbackRedemption ??
+      card?.program.minimumCashbackRedemption ??
+      0,
+  );
+
+  const cashbackRemainingToUnlock = Math.max(
+    cashbackMinimumToUse - Number(card?.balance ?? 0),
+    0,
+  );
+
+  const cashbackUnlockProgress =
+    cashbackMinimumToUse <= 0
+      ? 100
+      : Math.min(
+          (Number(card?.balance ?? 0) / cashbackMinimumToUse) * 100,
+          100,
+        );
 
   const isSpendPointsProgram =
     isPointsProgram && card?.program.pointsEarningMethod === 1;
@@ -207,6 +252,56 @@ export default function ScannerPage() {
 
     return Math.floor(amount / amountRequired) * pointsEarned;
   }, [card, isPointsProgram, isVisitPointsProgram, purchaseAmount]);
+
+  const estimatedCashback = useMemo(() => {
+    if (!card || !isCashbackProgram) {
+      return 0;
+    }
+
+    const grossAmount = Number(purchaseAmount);
+
+    const cashbackApplied =
+      useCashback && cashbackToRedeem.trim() !== ""
+        ? Number(cashbackToRedeem)
+        : 0;
+
+    if (
+      !Number.isFinite(grossAmount) ||
+      grossAmount <= 0 ||
+      !Number.isFinite(cashbackApplied) ||
+      cashbackApplied < 0
+    ) {
+      return 0;
+    }
+
+    // El cashback nuevo se calcula únicamente
+    // sobre lo pagado con efectivo o tarjeta.
+    const amountPaid = Math.max(grossAmount - cashbackApplied, 0);
+
+    const cashbackMethod = Number(card.program.cashbackEarningMethod) || 0;
+
+    if (cashbackMethod === 1) {
+      const percentage = Number(card.program.cashbackPercentage) || 0;
+
+      return Number((amountPaid * (percentage / 100)).toFixed(2));
+    }
+
+    if (cashbackMethod === 2) {
+      const cashbackAmount = Number(card.program.cashbackAmount) || 0;
+
+      const amountRequired = Number(card.program.cashbackAmountRequired) || 0;
+
+      if (cashbackAmount <= 0 || amountRequired <= 0) {
+        return 0;
+      }
+
+      return Number(
+        (Math.floor(amountPaid / amountRequired) * cashbackAmount).toFixed(2),
+      );
+    }
+
+    return 0;
+  }, [card, isCashbackProgram, purchaseAmount, cashbackToRedeem, useCashback]);
 
   const walletInstalled = useMemo(() => {
     if (!card) return false;
@@ -278,19 +373,202 @@ export default function ScannerPage() {
     await lookupCard(qrToken);
   }
 
+  async function registerCashbackSale() {
+    if (!card || !isCashbackProgram || addingStamp) {
+      return;
+    }
+
+    const grossPurchaseAmount = Number(purchaseAmount);
+
+    const cashbackAmount =
+      useCashback && cashbackToRedeem.trim() !== ""
+        ? Number(cashbackToRedeem)
+        : 0;
+
+    if (!Number.isFinite(grossPurchaseAmount) || grossPurchaseAmount <= 0) {
+      toast.error("Total de compra inválido", {
+        description: "Ingresa un importe mayor a cero.",
+      });
+
+      return;
+    }
+
+    if (!Number.isFinite(cashbackAmount) || cashbackAmount < 0) {
+      toast.error("Cashback inválido", {
+        description: "El cashback no puede ser negativo.",
+      });
+
+      return;
+    }
+
+    const maximumCashback = Math.min(Number(card.balance), grossPurchaseAmount);
+
+    if (cashbackAmount > maximumCashback) {
+      toast.error("El cashback ingresado no es válido.", {
+        description: `Puedes utilizar hasta ${formatMoney(maximumCashback)} en esta compra.`,
+      });
+
+      return;
+    }
+
+    if (cashbackAmount > 0 && !card.cashbackAvailable) {
+      toast.error("Cashback todavía no disponible", {
+        description: `El cliente necesita alcanzar el mínimo de ${formatMoney(
+          card.minimumCashbackRedemption ??
+            card.program.minimumCashbackRedemption ??
+            0,
+        )}.`,
+      });
+
+      return;
+    }
+
+    setAddingStamp(true);
+
+    try {
+      const response = await fetch("/api/wallet/cards/cashback-sale", {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          qrToken,
+
+          grossPurchaseAmount,
+
+          cashbackAmount,
+
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+
+      const payload = (await response.json()) as ApiPayload;
+
+      if (!response.ok) {
+        throw new Error(
+          payload.message ?? "No fue posible registrar la compra.",
+        );
+      }
+
+      const cashbackRedeemed = Number(
+        payload.cashbackRedeemed ?? cashbackAmount,
+      );
+
+      const cashbackEarned = Number(
+        payload.cashbackEarned ?? estimatedCashback,
+      );
+
+      const amountPaid = Number(
+        payload.purchaseAmount ?? grossPurchaseAmount - cashbackRedeemed,
+      );
+
+      const newBalance = Number(
+        payload.balance ?? card.balance - cashbackRedeemed + cashbackEarned,
+      );
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+
+              balance: newBalance,
+
+              cashbackBalance: newBalance,
+
+              cashbackAvailable: Boolean(
+                payload.cashbackAvailable ??
+                (newBalance > 0 &&
+                  newBalance >=
+                    Number(
+                      current.minimumCashbackRedemption ??
+                        current.program.minimumCashbackRedemption ??
+                        0,
+                    )),
+              ),
+
+              totalSpent: Number(
+                payload.totalSpent ?? (current.totalSpent ?? 0) + amountPaid,
+              ),
+
+              purchaseCount: Number(
+                payload.purchaseCount ?? (current.purchaseCount ?? 0) + 1,
+              ),
+
+              lifetimeEarned:
+                Number(current.lifetimeEarned ?? current.balance) +
+                cashbackEarned,
+
+              lifetimeRedeemed:
+                Number(current.lifetimeRedeemed ?? 0) + cashbackRedeemed,
+
+              transactionCount:
+                Number(current.transactionCount ?? 0) +
+                (cashbackRedeemed > 0 ? 2 : 1),
+
+              lastPurchaseAmount: amountPaid,
+
+              lastGrossPurchaseAmount: grossPurchaseAmount,
+
+              lastCashbackApplied: cashbackRedeemed,
+
+              lastPurchaseAt: new Date().toISOString(),
+
+              lastActivityAt: new Date().toISOString(),
+            }
+          : current,
+      );
+
+      setPurchaseAmount("");
+      setCashbackToRedeem("");
+      setUseCashback(false);
+
+      toast.success("Compra registrada", {
+        description:
+          cashbackRedeemed > 0
+            ? `${card.customer.name} utilizó ${formatMoney(
+                cashbackRedeemed,
+              )}, pagó ${formatMoney(amountPaid)} y obtuvo ${formatMoney(
+                cashbackEarned,
+              )} de cashback.`
+            : `${card.customer.name} obtuvo ${formatMoney(
+                cashbackEarned,
+              )} de cashback.`,
+      });
+    } catch (caught) {
+      toast.error("No se pudo registrar la compra", {
+        description: getErrorMessage(caught, "Ocurrió un error inesperado."),
+      });
+    } finally {
+      setAddingStamp(false);
+    }
+  }
+
   async function addStamp() {
     if (!card || addingStamp) return;
 
     const numericPurchaseAmount = Number(purchaseAmount);
 
     if (
-      isSpendPointsProgram &&
+      (isSpendPointsProgram || isCashbackProgram) &&
       (!Number.isFinite(numericPurchaseAmount) || numericPurchaseAmount <= 0)
     ) {
       toast.error("Total de compra inválido", {
-        description:
-          "Ingresa un importe mayor a cero para calcular los puntos.",
+        description: isCashbackProgram
+          ? "Ingresa un importe mayor a cero para calcular el cashback."
+          : "Ingresa un importe mayor a cero para calcular los puntos.",
       });
+
+      return;
+    }
+
+    if (isCashbackProgram && estimatedCashback <= 0) {
+      toast.error("La compra no genera cashback", {
+        description:
+          "El importe ingresado no cumple con la configuración del programa.",
+      });
+
       return;
     }
 
@@ -321,10 +599,17 @@ export default function ScannerPage() {
       }
 
       const earnedAmount = Number(
-        payload.earnedAmount ?? (isPointsProgram ? estimatedPoints : 1),
+        payload.earnedAmount ??
+          (isCashbackProgram
+            ? estimatedCashback
+            : isPointsProgram
+              ? estimatedPoints
+              : 1),
       );
       const newBalance = Number(payload.balance ?? card.balance + earnedAmount);
-      const target = Number(payload.target ?? card.target);
+      const target = isCashbackProgram
+        ? 0
+        : Number(payload.target ?? card.target);
 
       setCard((current) =>
         current
@@ -332,10 +617,30 @@ export default function ScannerPage() {
               ...current,
               balance: newBalance,
               target,
-              remaining: Math.max(target - newBalance, 0),
-              rewardAvailable: Boolean(
-                payload.rewardAvailable ?? newBalance >= target,
-              ),
+              remaining: isCashbackProgram
+                ? 0
+                : Math.max(target - newBalance, 0),
+
+              rewardAvailable: isCashbackProgram
+                ? false
+                : Boolean(payload.rewardAvailable ?? newBalance >= target),
+
+              cashbackAvailable: isCashbackProgram
+                ? Boolean(
+                    payload.cashbackAvailable ??
+                    (newBalance > 0 &&
+                      newBalance >=
+                        Number(
+                          current.minimumCashbackRedemption ??
+                            current.program.minimumCashbackRedemption ??
+                            0,
+                        )),
+                  )
+                : current.cashbackAvailable,
+
+              cashbackBalance: isCashbackProgram
+                ? Number(payload.cashbackBalance ?? newBalance)
+                : current.cashbackBalance,
               totalSpent: Number(
                 payload.totalSpent ??
                   (current.totalSpent ?? 0) + (validPurchaseAmount ?? 0),
@@ -364,24 +669,32 @@ export default function ScannerPage() {
       setPurchaseAmount("");
 
       toast.success(
-        isVisitPointsProgram
-          ? "Visita registrada"
-          : isPointsProgram
-            ? "Puntos agregados"
-            : "Sello agregado",
+        isCashbackProgram
+          ? "Cashback agregado"
+          : isVisitPointsProgram
+            ? "Visita registrada"
+            : isPointsProgram
+              ? "Puntos agregados"
+              : "Sello agregado",
         {
-          description: isPointsProgram
-            ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
-            : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
+          description: isCashbackProgram
+            ? `${card.customer.name} obtuvo ${formatMoney(
+                earnedAmount,
+              )} de cashback y ahora tiene ${formatMoney(newBalance)}.`
+            : isPointsProgram
+              ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
+              : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
         },
       );
     } catch (caught) {
       toast.error(
-        isVisitPointsProgram
-          ? "No se pudo registrar la visita"
-          : isPointsProgram
-            ? "No se pudieron agregar los puntos"
-            : "No se pudo agregar el sello",
+        isCashbackProgram
+          ? "No se pudo agregar el cashback"
+          : isVisitPointsProgram
+            ? "No se pudo registrar la visita"
+            : isPointsProgram
+              ? "No se pudieron agregar los puntos"
+              : "No se pudo agregar el sello",
         {
           description: getErrorMessage(
             caught,
@@ -456,13 +769,15 @@ export default function ScannerPage() {
     setCard(null);
     setQrToken("");
     setPurchaseAmount("");
+    setCashbackToRedeem("");
+    setUseCashback(false);
     setCameraEnabled(true);
     setManualMode(false);
   }
 
   return (
     <main
-      className={`mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] text-[#111827] ${
+      className={`mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] text-black ${
         card ? "pb-6 pt-4" : "pb-12 pt-8"
       }`}
     >
@@ -471,7 +786,7 @@ export default function ScannerPage() {
           <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e11d48]">
             Atención al cliente
           </span>
-          <h1 className="mt-3 text-[clamp(34px,4vw,48px)] font-extrabold leading-none tracking-[-0.045em] text-[#111827]">
+          <h1 className="mt-3 text-[clamp(34px,4vw,48px)] font-extrabold leading-none tracking-[-0.045em] text-black">
             Escanear tarjeta
           </h1>
           <p className="mt-3 text-sm text-slate-500 sm:text-base">
@@ -504,7 +819,7 @@ export default function ScannerPage() {
                   }}
                 />
                 {loading && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/90 font-bold text-[#111827] backdrop-blur-sm">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/90 font-bold text-black backdrop-blur-sm">
                     <LoaderCircle className="size-8 animate-spin text-[#e11d48]" />
                     Consultando tarjeta…
                   </div>
@@ -545,16 +860,13 @@ export default function ScannerPage() {
               <span className="grid size-14 place-items-center rounded-2xl bg-[#fff1f4] text-[#e11d48]">
                 <Keyboard size={27} />
               </span>
-              <h2 className="mt-5 text-2xl font-extrabold tracking-[-0.03em] text-[#111827]">
+              <h2 className="mt-5 text-2xl font-extrabold tracking-[-0.03em] text-black">
                 Introduce el código
               </h2>
               <p className="mt-2 text-sm text-slate-500">
                 Pega el token contenido en el QR de la tarjeta.
               </p>
-              <Label
-                htmlFor="qrToken"
-                className="mt-6 font-bold text-[#111827]"
-              >
+              <Label htmlFor="qrToken" className="mt-6 font-bold text-black">
                 Código de la tarjeta
               </Label>
               <Input
@@ -604,7 +916,7 @@ export default function ScannerPage() {
                 <small className="font-extrabold uppercase tracking-[0.13em] text-[#e11d48]">
                   Cliente encontrado
                 </small>
-                <h2 className="truncate text-2xl font-extrabold tracking-[-0.035em] text-[#111827]">
+                <h2 className="truncate text-2xl font-extrabold tracking-[-0.035em] text-black">
                   {card.customer.name}
                 </h2>
                 <p className="truncate text-sm text-slate-500">
@@ -624,7 +936,132 @@ export default function ScannerPage() {
             </div>
 
             <div className="px-5 py-5 sm:px-6">
-              {isPointsProgram ? (
+              {isCashbackProgram ? (
+                <div className="relative overflow-hidden rounded-[20px] border border-[#E5E7EB] bg-white">
+                  <div
+                    className="pointer-events-none absolute -right-16 -top-20 size-52 rounded-full bg-[#E11D48]/[0.07] blur-2xl"
+                    aria-hidden="true"
+                  />
+
+                  <div className="relative p-5 sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="grid size-12 shrink-0 place-items-center rounded-[15px] bg-[#E11D48] text-white shadow-[0_10px_24px_rgba(225,29,72,0.22)]">
+                          <Banknote size={23} />
+                        </span>
+
+                        <div>
+                          <small className="font-extrabold uppercase tracking-[0.14em] text-[#E11D48]">
+                            Saldo disponible
+                          </small>
+
+                          <strong className="mt-0.5 block text-3xl font-extrabold tracking-[-0.045em] text-black">
+                            {formatMoney(card.balance)}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <span className="rounded-full bg-black px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">
+                        Cashback
+                      </span>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-2 divide-x divide-[#E5E7EB] border-y border-[#E5E7EB] py-4">
+                      <div className="pr-4">
+                        <small className="font-bold uppercase tracking-[0.12em] text-[#6B7280]">
+                          Acumulación
+                        </small>
+
+                        <strong className="mt-1 block text-sm font-extrabold text-black sm:text-base">
+                          {card.program.cashbackEarningMethod === 1
+                            ? `${card.program.cashbackPercentage ?? 0}% por compra`
+                            : `${formatMoney(
+                                card.program.cashbackAmount,
+                              )} por cada ${formatMoney(
+                                card.program.cashbackAmountRequired,
+                              )}`}
+                        </strong>
+                      </div>
+
+                      <div className="pl-4">
+                        <small className="font-bold uppercase tracking-[0.12em] text-[#6B7280]">
+                          Disponible desde
+                        </small>
+
+                        <strong className="mt-1 block text-sm font-extrabold text-black sm:text-base">
+                          {formatMoney(cashbackMinimumToUse)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <div className="flex items-center justify-between gap-4 text-xs">
+                        <span className="font-bold text-[#6B7280]">
+                          {card.cashbackAvailable
+                            ? "Saldo listo para utilizar"
+                            : "Progreso para utilizar cashback"}
+                        </span>
+
+                        <strong className="text-black">
+                          {formatMoney(card.balance)}
+                          {" / "}
+                          {formatMoney(cashbackMinimumToUse)}
+                        </strong>
+                      </div>
+
+                      <div
+                        className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-[#F3F4F6]"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={cashbackMinimumToUse}
+                        aria-valuenow={Math.min(
+                          card.balance,
+                          cashbackMinimumToUse,
+                        )}
+                      >
+                        <span
+                          className="block h-full rounded-full bg-[#E11D48] transition-[width] duration-300"
+                          style={{
+                            width: `${cashbackUnlockProgress}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <span
+                          className={`grid size-6 shrink-0 place-items-center rounded-full ${
+                            card.cashbackAvailable
+                              ? "bg-black text-white"
+                              : "bg-[#F3F4F6] text-[#6B7280]"
+                          }`}
+                        >
+                          {card.cashbackAvailable ? (
+                            <Check size={14} />
+                          ) : (
+                            <Banknote size={13} />
+                          )}
+                        </span>
+
+                        <p className="text-sm text-[#6B7280]">
+                          {card.cashbackAvailable ? (
+                            <>
+                              El cliente puede aplicar su saldo en esta compra.
+                            </>
+                          ) : (
+                            <>
+                              Le faltan{" "}
+                              <strong className="text-black">
+                                {formatMoney(cashbackRemainingToUnlock)}
+                              </strong>{" "}
+                              para poder utilizarlo.
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : isPointsProgram ? (
                 <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -635,7 +1072,7 @@ export default function ScannerPage() {
                         <small className="font-bold uppercase tracking-[0.12em] text-slate-500">
                           Puntos disponibles
                         </small>
-                        <strong className="block text-3xl font-extrabold tracking-[-0.04em] text-[#111827]">
+                        <strong className="block text-3xl font-extrabold tracking-[-0.04em] text-black">
                           {card.balance.toLocaleString("es-MX")}
                         </strong>
                       </div>
@@ -645,7 +1082,7 @@ export default function ScannerPage() {
                       <small className="font-bold uppercase tracking-[0.12em] text-slate-500">
                         Meta
                       </small>
-                      <strong className="block text-xl font-extrabold text-[#111827]">
+                      <strong className="block text-xl font-extrabold text-black">
                         {card.target.toLocaleString("es-MX")}
                       </strong>
                     </div>
@@ -724,8 +1161,7 @@ export default function ScannerPage() {
                   )}
                 </div>
               )}
-
-              {card.rewardAvailable && (
+              {!isCashbackProgram && card.rewardAvailable && (
                 <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm">
                     <Gift size={19} />
@@ -740,7 +1176,6 @@ export default function ScannerPage() {
                   </div>
                 </div>
               )}
-
               {isVisitPointsProgram &&
                 card.program.limitOneVisitPerDay &&
                 card.checkedInToday && (
@@ -758,19 +1193,18 @@ export default function ScannerPage() {
                     </div>
                   </div>
                 )}
-
               {(!card.rewardAvailable || isPointsProgram) && (
                 <div className="mt-5">
                   <Label
                     htmlFor="purchaseAmount"
-                    className="font-bold text-[#111827]"
+                    className="font-bold text-black"
                   >
                     {isVisitPointsProgram
                       ? "Total de la compra (opcional)"
                       : "Total de la compra"}
                   </Label>
                   <div className="relative mt-2">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-extrabold text-[#111827]">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-extrabold text-black">
                       $
                     </span>
                     <Input
@@ -791,17 +1225,216 @@ export default function ScannerPage() {
                     </small>
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    {isVisitPointsProgram
-                      ? "El total de la compra es opcional para registrar la visita."
-                      : isSpendPointsProgram && estimatedPoints > 0
-                        ? `Esta compra generará ${estimatedPoints} puntos.`
-                        : "Se registrará en el historial de compras del cliente."}
+                    {isCashbackProgram
+                      ? estimatedCashback > 0
+                        ? `Esta compra generará ${formatMoney(
+                            estimatedCashback,
+                          )} de cashback.`
+                        : "Ingresa el total de la compra para calcular el cashback."
+                      : isVisitPointsProgram
+                        ? "El total de la compra es opcional para registrar la visita."
+                        : isSpendPointsProgram && estimatedPoints > 0
+                          ? `Esta compra generará ${estimatedPoints} puntos.`
+                          : "Se registrará en el historial de compras del cliente."}
                   </p>
+                </div>
+              )}
+              {isCashbackProgram && (
+                <div className="mt-5 space-y-4">
+                  <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-4 p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F3F4F6] text-[#E11D48]">
+                          <Banknote size={20} />
+                        </span>
+
+                        <div>
+                          <strong className="block text-sm text-black">
+                            Aplicar saldo cashback
+                          </strong>
+
+                          <span className="text-xs text-slate-500">
+                            {card.cashbackAvailable
+                              ? `${formatMoney(card.balance)} disponibles`
+                              : `Disponible al alcanzar ${formatMoney(
+                                  card.minimumCashbackRedemption ??
+                                    card.program.minimumCashbackRedemption ??
+                                    0,
+                                )}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={useCashback}
+                        aria-label="Utilizar saldo cashback"
+                        disabled={
+                          !card.cashbackAvailable || Number(purchaseAmount) <= 0
+                        }
+                        onClick={() => {
+                          const nextValue = !useCashback;
+
+                          setUseCashback(nextValue);
+
+                          if (!nextValue) {
+                            setCashbackToRedeem("");
+                          }
+                        }}
+                        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                          useCashback ? "bg-[#E11D48]" : "bg-[#F3F4F6]"
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        <span
+                          className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all ${
+                            useCashback ? "left-6" : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {useCashback && (
+                      <div className="border-t border-slate-200 bg-slate-50/70 p-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <Label
+                            htmlFor="cashbackToRedeem"
+                            className="font-bold text-black"
+                          >
+                            ¿Cuánto desea utilizar?
+                          </Label>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCashbackToRedeem(
+                                Math.min(
+                                  Number(card.balance),
+                                  Number(purchaseAmount || 0),
+                                ).toFixed(2),
+                              )
+                            }
+                            className="text-xs font-extrabold text-[#E11D48] hover:underline"
+                          >
+                            Usar máximo
+                          </button>
+                        </div>
+
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-extrabold text-black">
+                            $
+                          </span>
+
+                          <Input
+                            id="cashbackToRedeem"
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            max={Math.min(
+                              Number(card.balance),
+                              Number(purchaseAmount || 0),
+                            )}
+                            value={cashbackToRedeem}
+                            onChange={(event) =>
+                              setCashbackToRedeem(event.target.value)
+                            }
+                            placeholder="0.00"
+                            className={`h-14 rounded-[13px] bg-white pl-9 pr-16 text-lg font-bold ${
+                              Number(cashbackToRedeem || 0) >
+                              Math.min(
+                                Number(card.balance),
+                                Number(purchaseAmount || 0),
+                              )
+                                ? "border-red-400 focus-visible:ring-red-400"
+                                : "border-slate-200 focus-visible:ring-[#E11D48]"
+                            }`}
+                          />
+
+                          <small className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-500">
+                            MXN
+                          </small>
+                        </div>
+
+                        {Number(cashbackToRedeem || 0) >
+                          Math.min(
+                            Number(card.balance),
+                            Number(purchaseAmount || 0),
+                          ) && (
+                          <p className="mt-2 text-xs font-semibold text-red-600">
+                            Puedes utilizar como máximo{" "}
+                            {formatMoney(
+                              Math.min(
+                                Number(card.balance),
+                                Number(purchaseAmount || 0),
+                              ),
+                            )}
+                            .
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-[18px] bg-black p-4 text-white">
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
+                      <div>
+                        <small className="font-bold uppercase tracking-wider text-slate-400">
+                          Compra
+                        </small>
+
+                        <strong className="mt-1 block text-lg">
+                          {formatMoney(Number(purchaseAmount || 0))}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small className="font-bold uppercase tracking-wider text-slate-400">
+                          Cashback
+                        </small>
+
+                        <strong className="mt-1 block text-lg text-emerald-300">
+                          -
+                          {formatMoney(
+                            useCashback ? Number(cashbackToRedeem || 0) : 0,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small className="font-bold uppercase tracking-wider text-slate-400">
+                          Paga ahora
+                        </small>
+
+                        <strong className="mt-1 block text-lg">
+                          {formatMoney(
+                            Math.max(
+                              Number(purchaseAmount || 0) -
+                                (useCashback
+                                  ? Number(cashbackToRedeem || 0)
+                                  : 0),
+                              0,
+                            ),
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small className="font-bold uppercase tracking-wider text-slate-400">
+                          Obtiene
+                        </small>
+
+                        <strong className="mt-1 block text-lg text-emerald-300">
+                          +{formatMoney(estimatedCashback)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               <div className="mt-5 flex flex-wrap gap-3">
-                {card.rewardAvailable && (
+                {!isCashbackProgram && card.rewardAvailable && (
                   <Button
                     type="button"
                     className="h-11 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700"
@@ -818,36 +1451,64 @@ export default function ScannerPage() {
                     className="h-11 rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
                     disabled={
                       addingStamp ||
+                      (isCashbackProgram &&
+                        (!Number.isFinite(Number(purchaseAmount)) ||
+                          Number(purchaseAmount) <= 0 ||
+                          (useCashback &&
+                            (Number(cashbackToRedeem || 0) <= 0 ||
+                              Number(cashbackToRedeem || 0) >
+                                Math.min(
+                                  Number(card.balance),
+                                  Number(purchaseAmount || 0),
+                                ))))) ||
                       (isSpendPointsProgram && estimatedPoints <= 0) ||
                       (isVisitPointsProgram &&
                         Boolean(card.program.limitOneVisitPerDay) &&
                         Boolean(card.checkedInToday))
                     }
-                    onClick={addStamp}
+                    onClick={
+                      isCashbackProgram ? registerCashbackSale : addStamp
+                    }
                   >
                     {addingStamp ? (
                       <LoaderCircle className="mr-2 size-5 animate-spin" />
+                    ) : isCashbackProgram ? (
+                      <Banknote className="mr-2 size-5" />
                     ) : isPointsProgram ? (
                       <Coins className="mr-2 size-5" />
                     ) : (
                       <Stamp className="mr-2 size-5" />
                     )}
                     {addingStamp
-                      ? isVisitPointsProgram
-                        ? "Registrando visita…"
-                        : isPointsProgram
-                          ? "Agregando puntos…"
-                          : "Agregando sello…"
-                      : isVisitPointsProgram
-                        ? card.program.limitOneVisitPerDay &&
-                          card.checkedInToday
-                          ? "Visita registrada hoy"
-                          : `Registrar visita · +${estimatedPoints} puntos`
-                        : isSpendPointsProgram
-                          ? estimatedPoints > 0
-                            ? `Agregar ${estimatedPoints} puntos`
-                            : "Ingresa una compra válida"
-                          : "Agregar 1 sello"}
+                      ? isCashbackProgram
+                        ? "Registrando compra…"
+                        : isVisitPointsProgram
+                          ? "Registrando visita…"
+                          : isPointsProgram
+                            ? "Agregando puntos…"
+                            : "Agregando sello…"
+                      : isCashbackProgram
+                        ? Number(purchaseAmount) > 0
+                          ? `Registrar compra · ${formatMoney(
+                              Math.max(
+                                Number(purchaseAmount) -
+                                  (useCashback
+                                    ? Number(cashbackToRedeem || 0)
+                                    : 0),
+                                0,
+                              ),
+                            )}`
+                          : "Ingresa una compra válida"
+                        : isVisitPointsProgram
+                          ? card.program.limitOneVisitPerDay &&
+                            card.checkedInToday
+                            ? "Visita registrada hoy"
+                            : `Registrar visita · +${estimatedPoints} puntos`
+                          : isSpendPointsProgram
+                            ? estimatedPoints > 0
+                              ? `Agregar ${estimatedPoints} puntos`
+                              : "Ingresa una compra válida"
+                            : "Agregar 1 sello"}
                   </Button>
                 )}
               </div>
@@ -856,7 +1517,7 @@ export default function ScannerPage() {
 
           <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
             <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-5">
-              <h3 className="text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
+              <h3 className="text-lg font-extrabold tracking-[-0.025em] text-black">
                 Información del cliente
               </h3>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -884,7 +1545,7 @@ export default function ScannerPage() {
             </Card>
 
             <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-5">
-              <h3 className="text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
+              <h3 className="text-lg font-extrabold tracking-[-0.025em] text-black">
                 Información de la tarjeta
               </h3>
               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -900,17 +1561,41 @@ export default function ScannerPage() {
                 />
                 <Metric
                   icon={
-                    isPointsProgram ? <Coins size={18} /> : <Stamp size={18} />
+                    isCashbackProgram ? (
+                      <Banknote size={18} />
+                    ) : isPointsProgram ? (
+                      <Coins size={18} />
+                    ) : (
+                      <Stamp size={18} />
+                    )
                   }
                   label={
-                    isPointsProgram ? "Puntos históricos" : "Sellos históricos"
+                    isCashbackProgram
+                      ? "Cashback acumulado"
+                      : isPointsProgram
+                        ? "Puntos históricos"
+                        : "Sellos históricos"
                   }
-                  value={String(card.lifetimeEarned ?? card.balance)}
+                  value={
+                    isCashbackProgram
+                      ? formatMoney(card.lifetimeEarned ?? card.balance)
+                      : String(card.lifetimeEarned ?? card.balance)
+                  }
                 />
                 <Metric
-                  icon={<Gift size={18} />}
-                  label="Canjes"
-                  value={String(card.lifetimeRedeemed ?? 0)}
+                  icon={
+                    isCashbackProgram ? (
+                      <Banknote size={18} />
+                    ) : (
+                      <Gift size={18} />
+                    )
+                  }
+                  label={isCashbackProgram ? "Cashback utilizado" : "Canjes"}
+                  value={
+                    isCashbackProgram
+                      ? formatMoney(card.lifetimeRedeemed)
+                      : String(card.lifetimeRedeemed ?? 0)
+                  }
                 />
               </div>
               <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -966,10 +1651,10 @@ export default function ScannerPage() {
       >
         <AlertDialogContent className="rounded-[22px] border-[#e5e7eb]">
           <AlertDialogHeader>
-            <span className="mb-2 grid size-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <span className="mb-2 grid size-12 place-items-center rounded-2xl bg-[#F3F4F6] text-[#E11D48]">
               <Gift size={24} />
             </span>
-            <AlertDialogTitle className="text-2xl font-extrabold tracking-[-0.03em] text-[#111827]">
+            <AlertDialogTitle className="text-2xl font-extrabold tracking-[-0.03em] text-black">
               ¿Confirmas el canje?
             </AlertDialogTitle>
             <AlertDialogDescription className="leading-6">
@@ -983,7 +1668,7 @@ export default function ScannerPage() {
             <small className="font-bold uppercase tracking-wider text-slate-500">
               Recompensa
             </small>
-            <strong className="mt-1 block text-[#111827]">
+            <strong className="mt-1 block text-black">
               {card?.reward?.name ?? "Recompensa disponible"}
             </strong>
             {card?.reward?.description && (
@@ -1037,9 +1722,7 @@ function InfoRow({
         <small className="block text-xs font-medium text-slate-500">
           {label}
         </small>
-        <strong className="block truncate text-sm text-[#111827]">
-          {value}
-        </strong>
+        <strong className="block truncate text-sm text-black">{value}</strong>
       </div>
     </div>
   );
@@ -1060,7 +1743,7 @@ function Metric({
       <small className="mt-2 block text-xs font-medium text-slate-500">
         {label}
       </small>
-      <strong className="mt-1 block truncate text-lg font-extrabold tracking-[-0.025em] text-[#111827]">
+      <strong className="mt-1 block truncate text-lg font-extrabold tracking-[-0.025em] text-black">
         {value}
       </strong>
     </div>

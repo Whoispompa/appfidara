@@ -49,11 +49,16 @@ type ProgramInformation = {
   name: string;
   description?: string | null;
   programType: number;
-  targetValue: number;
+  targetValue?: number | null;
   pointsEarned?: number | null;
   amountRequired?: number | null;
   pointsEarningMethod?: number | null;
   limitOneVisitPerDay?: boolean;
+  cashbackEarningMethod?: number | null;
+  cashbackPercentage?: number | null;
+  cashbackAmount?: number | null;
+  cashbackAmountRequired?: number | null;
+  minimumCashbackRedemption?: number | null;
   isRecurring: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
@@ -64,7 +69,7 @@ type ProgramInformation = {
   cardStripImageUrl?: string | null;
   cardStripColor?: string | null;
   showPoweredByFidara: boolean;
-  reward: RewardInformation;
+  reward?: RewardInformation | null;
 };
 
 type ProgramForm = {
@@ -76,6 +81,11 @@ type ProgramForm = {
   amountRequired: string;
   pointsEarningMethod: number;
   limitOneVisitPerDay: boolean;
+  cashbackEarningMethod: number;
+  cashbackPercentage: string;
+  cashbackAmount: string;
+  cashbackAmountRequired: string;
+  minimumCashbackRedemption: string;
   isRecurring: boolean;
   cardBackgroundColor: string;
   cardForegroundColor: string;
@@ -139,6 +149,11 @@ const initialForm: ProgramForm = {
   amountRequired: "10",
   pointsEarningMethod: 1,
   limitOneVisitPerDay: false,
+  cashbackEarningMethod: 1,
+  cashbackPercentage: "5",
+  cashbackAmount: "10",
+  cashbackAmountRequired: "200",
+  minimumCashbackRedemption: "50",
   isRecurring: true,
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
@@ -165,6 +180,11 @@ const emptyProgram: ProgramInformation = {
   amountRequired: null,
   pointsEarningMethod: 1,
   limitOneVisitPerDay: false,
+  cashbackEarningMethod: 1,
+  cashbackPercentage: 5,
+  cashbackAmount: 10,
+  cashbackAmountRequired: 200,
+  minimumCashbackRedemption: 50,
   isRecurring: true,
   cardLogoUrl: null,
   activeStampImageUrl: null,
@@ -236,6 +256,7 @@ export default function CardEditorPage() {
 
   const isStampProgram = form.programType === 1;
   const isPointsProgram = form.programType === 2;
+  const isCashbackProgram = form.programType === 3;
 
   const loadProgram = useCallback(async () => {
     setLoading(true);
@@ -308,6 +329,15 @@ export default function CardEditorPage() {
         pointsEarningMethod: Number(data.pointsEarningMethod ?? 1),
 
         limitOneVisitPerDay: Boolean(data.limitOneVisitPerDay),
+        cashbackEarningMethod: Number(data.cashbackEarningMethod ?? 1),
+
+        cashbackPercentage: String(data.cashbackPercentage ?? 5),
+
+        cashbackAmount: String(data.cashbackAmount ?? 10),
+
+        cashbackAmountRequired: String(data.cashbackAmountRequired ?? 200),
+
+        minimumCashbackRedemption: String(data.minimumCashbackRedemption ?? 50),
 
         isRecurring: data.isRecurring,
 
@@ -368,17 +398,37 @@ export default function CardEditorPage() {
     setSuccess("");
   }
 
-  function selectProgramType(programType: 1 | 2) {
+  function selectProgramType(programType: 1 | 2 | 3) {
     setForm((current) => ({
       ...current,
+
       programType,
-      targetValue: programType === 1 ? "10" : "100",
-      pointsEarned: programType === 1 ? "1" : current.pointsEarned || "1",
-      amountRequired: programType === 1 ? "10" : current.amountRequired || "10",
+
+      targetValue: programType === 1 ? "10" : programType === 2 ? "100" : "0",
+
+      pointsEarned: programType === 2 ? current.pointsEarned || "1" : "1",
+
+      amountRequired: programType === 2 ? current.amountRequired || "10" : "10",
+
       pointsEarningMethod:
-        programType === 1 ? 1 : current.pointsEarningMethod || 1,
+        programType === 2 ? current.pointsEarningMethod || 1 : 1,
+
       limitOneVisitPerDay:
-        programType === 1 ? false : current.limitOneVisitPerDay,
+        programType === 2 ? current.limitOneVisitPerDay : false,
+
+      cashbackEarningMethod:
+        programType === 3 ? current.cashbackEarningMethod || 1 : 1,
+
+      cashbackPercentage:
+        programType === 3 ? current.cashbackPercentage || "5" : "5",
+
+      cashbackAmount: programType === 3 ? current.cashbackAmount || "10" : "10",
+
+      cashbackAmountRequired:
+        programType === 3 ? current.cashbackAmountRequired || "200" : "200",
+
+      minimumCashbackRedemption:
+        programType === 3 ? current.minimumCashbackRedemption || "50" : "50",
     }));
 
     setProgramTypeSelected(true);
@@ -538,6 +588,14 @@ export default function CardEditorPage() {
 
     const amountRequired = Number(form.amountRequired);
 
+    const cashbackPercentage = Number(form.cashbackPercentage);
+
+    const cashbackAmount = Number(form.cashbackAmount);
+
+    const cashbackAmountRequired = Number(form.cashbackAmountRequired);
+
+    const minimumCashbackRedemption = Number(form.minimumCashbackRedemption);
+
     const rewardValue = Number(form.rewardValue || "0");
 
     if (!form.name.trim()) {
@@ -546,7 +604,7 @@ export default function CardEditorPage() {
       return;
     }
 
-    if (!form.rewardName.trim()) {
+    if (!isCashbackProgram && !form.rewardName.trim()) {
       setError("El nombre de la recompensa es obligatorio.");
 
       return;
@@ -588,7 +646,56 @@ export default function CardEditorPage() {
       }
     }
 
+    if (isCashbackProgram) {
+      if (form.cashbackEarningMethod === 1) {
+        if (
+          !Number.isFinite(cashbackPercentage) ||
+          cashbackPercentage <= 0 ||
+          cashbackPercentage > 100
+        ) {
+          setError(
+            "El porcentaje de cashback debe ser mayor a 0 y no puede superar 100.",
+          );
+
+          return;
+        }
+      } else if (form.cashbackEarningMethod === 2) {
+        if (!Number.isFinite(cashbackAmount) || cashbackAmount <= 0) {
+          setError("El cashback otorgado debe ser mayor a cero.");
+
+          return;
+        }
+
+        if (
+          !Number.isFinite(cashbackAmountRequired) ||
+          cashbackAmountRequired <= 0
+        ) {
+          setError(
+            "El importe necesario para generar cashback debe ser mayor a cero.",
+          );
+
+          return;
+        }
+      } else {
+        setError("Selecciona un método de cashback.");
+
+        return;
+      }
+
+      if (
+        !Number.isFinite(minimumCashbackRedemption) ||
+        minimumCashbackRedemption < 0
+      ) {
+        setError(
+          "El saldo mínimo para utilizar cashback no puede ser negativo.",
+        );
+
+        return;
+      }
+    }
+
     if (
+      !isCashbackProgram &&
       form.rewardType === 3 &&
       (!Number.isFinite(rewardValue) || rewardValue <= 0 || rewardValue > 100)
     ) {
@@ -597,7 +704,14 @@ export default function CardEditorPage() {
       return;
     }
 
+    if (!isCashbackProgram && !form.rewardName.trim()) {
+      setError("El nombre de la recompensa es obligatorio.");
+
+      return;
+    }
+
     if (
+      !isCashbackProgram &&
       form.rewardType === 2 &&
       (!Number.isFinite(rewardValue) || rewardValue <= 0)
     ) {
@@ -619,32 +733,69 @@ export default function CardEditorPage() {
 
       formData.append("ProgramType", String(form.programType));
 
-      formData.append("TargetValue", String(targetValue));
+      // Sellos y puntos tienen meta.
+      // Cashback no utiliza TargetValue.
+      if (!isCashbackProgram) {
+        formData.append("TargetValue", String(targetValue));
+      }
 
+      // Configuración del programa de puntos.
       if (isPointsProgram) {
         formData.append("PointsEarned", String(pointsEarned));
+
         formData.append(
           "PointsEarningMethod",
           String(form.pointsEarningMethod),
         );
+
         formData.append(
           "LimitOneVisitPerDay",
           String(form.pointsEarningMethod === 2 && form.limitOneVisitPerDay),
         );
-        formData.append("CardStripColor", form.cardStripColor);
 
         if (form.pointsEarningMethod === 1) {
           formData.append("AmountRequired", String(amountRequired));
         }
-
-        if (form.stripDesignMode === "image" && files.stripImage) {
-          formData.append("StripImage", files.stripImage);
-        }
-        formData.append(
-          "RemoveStripImage",
-          String(form.stripDesignMode === "color"),
-        );
       }
+
+      // Configuración del programa de cashback.
+      if (isCashbackProgram) {
+        formData.append(
+          "CashbackEarningMethod",
+          String(form.cashbackEarningMethod),
+        );
+
+        formData.append(
+          "MinimumCashbackRedemption",
+          String(minimumCashbackRedemption),
+        );
+
+        if (form.cashbackEarningMethod === 1) {
+          formData.append("CashbackPercentage", String(cashbackPercentage));
+        }
+
+        if (form.cashbackEarningMethod === 2) {
+          formData.append("CashbackAmount", String(cashbackAmount));
+
+          formData.append(
+            "CashbackAmountRequired",
+            String(cashbackAmountRequired),
+          );
+        }
+      }
+
+      // La parte central se comparte entre sellos,
+      // puntos y cashback.
+      formData.append("CardStripColor", form.cardStripColor);
+
+      if (form.stripDesignMode === "image" && files.stripImage) {
+        formData.append("StripImage", files.stripImage);
+      }
+
+      formData.append(
+        "RemoveStripImage",
+        String(form.stripDesignMode === "color"),
+      );
 
       formData.append("IsRecurring", String(form.isRecurring));
 
@@ -656,20 +807,25 @@ export default function CardEditorPage() {
 
       formData.append("ShowPoweredByFidara", String(form.showPoweredByFidara));
 
-      formData.append("RewardName", form.rewardName.trim());
+      // Cashback no utiliza Reward.
+      if (!isCashbackProgram) {
+        formData.append("RewardName", form.rewardName.trim());
 
-      formData.append("RewardDescription", form.rewardDescription.trim());
+        formData.append("RewardDescription", form.rewardDescription.trim());
 
-      formData.append("RewardType", String(form.rewardType));
+        formData.append("RewardType", String(form.rewardType));
 
-      if (form.rewardType === 2 || form.rewardType === 3) {
-        formData.append("RewardValue", String(rewardValue));
+        if (form.rewardType === 2 || form.rewardType === 3) {
+          formData.append("RewardValue", String(rewardValue));
+        }
       }
 
+      // Logo disponible para los tres programas.
       if (files.logo) {
         formData.append("Logo", files.logo);
       }
 
+      // Estas imágenes solo corresponden a sellos.
       if (isStampProgram && files.activeStamp) {
         formData.append("ActiveStamp", files.activeStamp);
       }
@@ -874,17 +1030,20 @@ export default function CardEditorPage() {
 
               <button
                 type="button"
-                className="card-type-option upcoming"
-                disabled
+                className="card-type-option available"
+                onClick={() => selectProgramType(3)}
               >
                 <span className="card-type-icon">
                   <Banknote size={25} />
                 </span>
+
                 <span className="card-type-copy">
                   <strong>Cashback</strong>
+
                   <small>Devuelve una parte de cada compra como saldo.</small>
                 </span>
-                <span className="card-type-status">Próximamente</span>
+
+                <span className="card-type-status available">Disponible</span>
               </button>
 
               <button
@@ -1003,13 +1162,23 @@ export default function CardEditorPage() {
 
             <div className="selected-program-summary">
               <span className="selected-program-icon">
-                {isStampProgram ? <Stamp size={22} /> : <Coins size={22} />}
+                {isStampProgram ? (
+                  <Stamp size={22} />
+                ) : isPointsProgram ? (
+                  <Coins size={22} />
+                ) : (
+                  <Banknote size={22} />
+                )}
               </span>
 
               <span>
                 <small>Tipo de tarjeta</small>
                 <strong>
-                  {isStampProgram ? "Programa de sellos" : "Programa de puntos"}
+                  {isStampProgram
+                    ? "Programa de sellos"
+                    : isPointsProgram
+                      ? "Programa de puntos"
+                      : "Programa de cashback"}
                 </strong>
               </span>
 
@@ -1122,88 +1291,214 @@ export default function CardEditorPage() {
             </div>
           </section>
 
-          <section className="settings-card">
-            <div className="settings-card-heading">
-              <span>
-                <Gift size={19} />
-              </span>
+          {isCashbackProgram && (
+            <section className="settings-card">
+              <div className="settings-card-heading">
+                <span>
+                  <Banknote size={19} />
+                </span>
 
-              <div>
-                <h2>Recompensa</h2>
-                <p>Define qué recibe el cliente.</p>
+                <div>
+                  <h2>Cashback</h2>
+                  <p>Configura cómo recibirán saldo tus clientes.</p>
+                </div>
               </div>
-            </div>
 
-            <div className="settings-fields reward-fields">
-              {isStampProgram ? (
-                <label>
-                  <span>Sellos requeridos</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    step={1}
-                    value={form.targetValue}
-                    onChange={(event) =>
-                      updateField(
-                        "targetValue",
-                        normalizeNumericInput(event.target.value),
-                      )
+              <div className="points-earning-settings">
+                <div className="settings-card-heading">
+                  <div>
+                    <h3>¿Cómo recibirán cashback los clientes?</h3>
+
+                    <p>Selecciona cómo se calculará el saldo en cada compra.</p>
+                  </div>
+                </div>
+
+                <div className="program-type-grid">
+                  <button
+                    type="button"
+                    className={
+                      form.cashbackEarningMethod === 1 ? "selected" : ""
                     }
-                    required
-                  />
-                </label>
-              ) : (
-                <>
-                  {form.pointsEarningMethod === 1 && (
+                    onClick={() => updateField("cashbackEarningMethod", 1)}
+                  >
+                    <span>
+                      <BadgePercent size={22} />
+                    </span>
+
+                    <strong>Por porcentaje</strong>
+
+                    <small>
+                      Devuelve un porcentaje del total de la compra.
+                    </small>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      form.cashbackEarningMethod === 2 ? "selected" : ""
+                    }
+                    onClick={() => updateField("cashbackEarningMethod", 2)}
+                  >
+                    <span>
+                      <Banknote size={22} />
+                    </span>
+
+                    <strong>Por cantidad fija</strong>
+
+                    <small>
+                      Entrega una cantidad de saldo por cada monto gastado.
+                    </small>
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-fields reward-fields">
+                {form.cashbackEarningMethod === 1 ? (
+                  <label>
+                    <span>Porcentaje de cashback</span>
+
+                    <div className="money-field">
+                      <input
+                        type="number"
+                        min={0.01}
+                        max={100}
+                        step={0.01}
+                        value={form.cashbackPercentage}
+                        onChange={(event) =>
+                          updateField(
+                            "cashbackPercentage",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        required
+                      />
+
+                      <small>%</small>
+                    </div>
+
+                    <small className="field-help">
+                      Ejemplo: una compra de $500 con{" "}
+                      {form.cashbackPercentage || 0}% entrega $
+                      {(
+                        (500 * (Number(form.cashbackPercentage) || 0)) /
+                        100
+                      ).toFixed(2)}{" "}
+                      MXN de cashback.
+                    </small>
+                  </label>
+                ) : (
+                  <>
                     <label>
-                      <span>Por cada compra de</span>
+                      <span>Cashback otorgado</span>
+
                       <div className="money-field">
                         <b>$</b>
+
                         <input
                           type="number"
                           min={0.01}
                           step={0.01}
-                          value={form.amountRequired}
+                          value={form.cashbackAmount}
                           onChange={(event) =>
                             updateField(
-                              "amountRequired",
+                              "cashbackAmount",
                               normalizeNumericInput(event.target.value),
                             )
                           }
                           required
                         />
+
                         <small>MXN</small>
                       </div>
                     </label>
-                  )}
 
-                  <label>
-                    <span>
-                      {form.pointsEarningMethod === 2
-                        ? "Puntos por visita"
-                        : "Puntos otorgados"}
-                    </span>
+                    <label>
+                      <span>Por cada compra de</span>
+
+                      <div className="money-field">
+                        <b>$</b>
+
+                        <input
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          value={form.cashbackAmountRequired}
+                          onChange={(event) =>
+                            updateField(
+                              "cashbackAmountRequired",
+                              normalizeNumericInput(event.target.value),
+                            )
+                          }
+                          required
+                        />
+
+                        <small>MXN</small>
+                      </div>
+                    </label>
+
+                    <div className="full-field">
+                      <small className="field-help">
+                        Por cada ${form.cashbackAmountRequired || 0} MXN
+                        gastados se entregarán ${form.cashbackAmount || 0} MXN
+                        de cashback.
+                      </small>
+                    </div>
+                  </>
+                )}
+
+                <label className="full-field">
+                  <span>Saldo mínimo para utilizar cashback</span>
+
+                  <div className="money-field">
+                    <b>$</b>
+
                     <input
                       type="number"
-                      min={0.01}
+                      min={0}
                       step={0.01}
-                      value={form.pointsEarned}
+                      value={form.minimumCashbackRedemption}
                       onChange={(event) =>
                         updateField(
-                          "pointsEarned",
+                          "minimumCashbackRedemption",
                           normalizeNumericInput(event.target.value),
                         )
                       }
                       required
                     />
-                  </label>
 
-                  <label className="full-field">
-                    <span>Puntos necesarios para la recompensa</span>
+                    <small>MXN</small>
+                  </div>
+
+                  <small className="field-help">
+                    El cliente podrá usar su saldo cuando acumule al menos esta
+                    cantidad.
+                  </small>
+                </label>
+              </div>
+            </section>
+          )}
+
+          {!isCashbackProgram && (
+            <section className="settings-card">
+              <div className="settings-card-heading">
+                <span>
+                  <Gift size={19} />
+                </span>
+
+                <div>
+                  <h2>Recompensa</h2>
+                  <p>Define qué recibe el cliente.</p>
+                </div>
+              </div>
+
+              <div className="settings-fields reward-fields">
+                {isStampProgram ? (
+                  <label>
+                    <span>Sellos requeridos</span>
                     <input
                       type="number"
                       min={1}
+                      max={20}
                       step={1}
                       value={form.targetValue}
                       onChange={(event) =>
@@ -1214,106 +1509,170 @@ export default function CardEditorPage() {
                       }
                       required
                     />
-                    <small className="field-help">
-                      {form.pointsEarningMethod === 2
-                        ? `Cada visita otorgará ${form.pointsEarned || 0} puntos.`
-                        : `Por cada $${form.amountRequired || 0} MXN se otorgarán ${form.pointsEarned || 0} puntos.`}
-                    </small>
                   </label>
-                </>
-              )}
+                ) : (
+                  <>
+                    {form.pointsEarningMethod === 1 && (
+                      <label>
+                        <span>Por cada compra de</span>
+                        <div className="money-field">
+                          <b>$</b>
+                          <input
+                            type="number"
+                            min={0.01}
+                            step={0.01}
+                            value={form.amountRequired}
+                            onChange={(event) =>
+                              updateField(
+                                "amountRequired",
+                                normalizeNumericInput(event.target.value),
+                              )
+                            }
+                            required
+                          />
+                          <small>MXN</small>
+                        </div>
+                      </label>
+                    )}
 
-              <label>
-                <span>Nombre de la recompensa</span>
+                    <label>
+                      <span>
+                        {form.pointsEarningMethod === 2
+                          ? "Puntos por visita"
+                          : "Puntos otorgados"}
+                      </span>
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={form.pointsEarned}
+                        onChange={(event) =>
+                          updateField(
+                            "pointsEarned",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        required
+                      />
+                    </label>
 
-                <input
-                  value={form.rewardName}
-                  onChange={(event) =>
-                    updateField("rewardName", event.target.value)
-                  }
-                  placeholder="Ej. Café gratis"
-                  maxLength={100}
-                  required
-                />
-              </label>
+                    <label className="full-field">
+                      <span>Puntos necesarios para la recompensa</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={form.targetValue}
+                        onChange={(event) =>
+                          updateField(
+                            "targetValue",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        required
+                      />
+                      <small className="field-help">
+                        {form.pointsEarningMethod === 2
+                          ? `Cada visita otorgará ${form.pointsEarned || 0} puntos.`
+                          : `Por cada $${form.amountRequired || 0} MXN se otorgarán ${form.pointsEarned || 0} puntos.`}
+                      </small>
+                    </label>
+                  </>
+                )}
 
-              <label>
-                <span>Tipo de recompensa</span>
-                <select
-                  value={form.rewardType}
-                  onChange={(event) =>
-                    updateField("rewardType", Number(event.target.value))
-                  }
-                >
-                  <option value={1}>Producto o beneficio</option>
-                  <option value={2}>Descuento en pesos</option>
-                  <option value={3}>Descuento porcentual</option>
-                </select>
-              </label>
-
-              {(form.rewardType === 2 || form.rewardType === 3) && (
                 <label>
-                  <span>
-                    {form.rewardType === 2
-                      ? "Valor del descuento"
-                      : "Porcentaje de descuento"}
-                  </span>
-                  <div className="money-field">
-                    {form.rewardType === 2 && <b>$</b>}
-                    <input
-                      type="number"
-                      min={0.01}
-                      max={form.rewardType === 3 ? 100 : undefined}
-                      step={0.01}
-                      value={form.rewardValue}
-                      onChange={(event) =>
-                        updateField(
-                          "rewardValue",
-                          normalizeNumericInput(event.target.value),
-                        )
-                      }
-                      required
-                    />
-                    <small>{form.rewardType === 2 ? "MXN" : "%"}</small>
-                  </div>
+                  <span>Nombre de la recompensa</span>
+
+                  <input
+                    value={form.rewardName}
+                    onChange={(event) =>
+                      updateField("rewardName", event.target.value)
+                    }
+                    placeholder="Ej. Café gratis"
+                    maxLength={100}
+                    required
+                  />
                 </label>
-              )}
 
-              <label className="full-field">
-                <span>Descripción de la recompensa</span>
+                <label>
+                  <span>Tipo de recompensa</span>
+                  <select
+                    value={form.rewardType}
+                    onChange={(event) =>
+                      updateField("rewardType", Number(event.target.value))
+                    }
+                  >
+                    <option value={1}>Producto o beneficio</option>
+                    <option value={2}>Descuento en pesos</option>
+                    <option value={3}>Descuento porcentual</option>
+                  </select>
+                </label>
 
-                <textarea
-                  value={form.rewardDescription}
-                  onChange={(event) =>
-                    updateField("rewardDescription", event.target.value)
-                  }
-                  rows={2}
-                  maxLength={250}
-                />
-              </label>
+                {(form.rewardType === 2 || form.rewardType === 3) && (
+                  <label>
+                    <span>
+                      {form.rewardType === 2
+                        ? "Valor del descuento"
+                        : "Porcentaje de descuento"}
+                    </span>
+                    <div className="money-field">
+                      {form.rewardType === 2 && <b>$</b>}
+                      <input
+                        type="number"
+                        min={0.01}
+                        max={form.rewardType === 3 ? 100 : undefined}
+                        step={0.01}
+                        value={form.rewardValue}
+                        onChange={(event) =>
+                          updateField(
+                            "rewardValue",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        required
+                      />
+                      <small>{form.rewardType === 2 ? "MXN" : "%"}</small>
+                    </div>
+                  </label>
+                )}
 
-              <label className="settings-toggle full-field">
-                <input
-                  type="checkbox"
-                  checked={form.isRecurring}
-                  onChange={(event) =>
-                    updateField("isRecurring", event.target.checked)
-                  }
-                />
+                <label className="full-field">
+                  <span>Descripción de la recompensa</span>
 
-                <span className="toggle-control" />
+                  <textarea
+                    value={form.rewardDescription}
+                    onChange={(event) =>
+                      updateField("rewardDescription", event.target.value)
+                    }
+                    rows={2}
+                    maxLength={250}
+                  />
+                </label>
 
-                <span>
-                  <strong>Reiniciar después del canje</strong>
+                <label className="settings-toggle full-field">
+                  <input
+                    type="checkbox"
+                    checked={form.isRecurring}
+                    onChange={(event) =>
+                      updateField("isRecurring", event.target.checked)
+                    }
+                  />
 
-                  <br />
-                  <small>
-                    El cliente podrá comenzar otra tarjeta al recibir su premio.
-                  </small>
-                </span>
-              </label>
-            </div>
-          </section>
+                  <span className="toggle-control" />
+
+                  <span>
+                    <strong>Reiniciar después del canje</strong>
+
+                    <br />
+                    <small>
+                      El cliente podrá comenzar otra tarjeta al recibir su
+                      premio.
+                    </small>
+                  </span>
+                </label>
+              </div>
+            </section>
+          )}
 
           <section className="settings-card">
             <div className="settings-card-heading">
@@ -1472,89 +1831,88 @@ export default function CardEditorPage() {
                   </label>
                 </>
               )}
-                <div className="full-field">
-                  <div className="settings-card-heading">
-                    <div>
-                      <h3>Diseño de la parte central</h3>
-                      <p>
-                        Usa una imagen para Wallet o conserva un bloque de
-                        color.
-                      </p>
-                    </div>
+              <div className="full-field">
+                <div className="settings-card-heading">
+                  <div>
+                    <h3>Diseño de la parte central</h3>
+                    <p>
+                      Usa una imagen para Wallet o conserva un bloque de color.
+                    </p>
                   </div>
-
-                  <div className="program-type-grid">
-                    <button
-                      type="button"
-                      className={
-                        form.stripDesignMode === "image" ? "selected" : ""
-                      }
-                      onClick={() => updateField("stripDesignMode", "image")}
-                    >
-                      <span>
-                        <ImageIcon size={22} />
-                      </span>
-                      <strong>Usar imagen</strong>
-                      <small>PNG · mínimo 1125 × 432 px · máximo 3 MB.</small>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        form.stripDesignMode === "color" ? "selected" : ""
-                      }
-                      onClick={() => updateField("stripDesignMode", "color")}
-                    >
-                      <span>
-                        <Palette size={22} />
-                      </span>
-                      <strong>Usar color</strong>
-                      <small>Aplica un color sólido al área central.</small>
-                    </button>
-                  </div>
-
-                  {form.stripDesignMode === "image" ? (
-                    <label className="image-upload">
-                      <span>Imagen central</span>
-
-                      <div>
-                        {previews.stripImage ? (
-                          <img
-                            src={previews.stripImage}
-                            alt="Imagen central actual"
-                          />
-                        ) : (
-                          <ImageIcon size={24} />
-                        )}
-
-                        <strong>
-                          <Upload size={15} />
-                          {previews.stripImage ? "Cambiar" : "Seleccionar PNG"}
-                        </strong>
-                      </div>
-
-                      <input
-                        type="file"
-                        accept="image/png"
-                        onChange={selectStripImage}
-                      />
-                    </label>
-                  ) : (
-                    <label>
-                      <span>Color de la parte central</span>
-                      <div className="color-input">
-                        <input
-                          type="color"
-                          value={form.cardStripColor}
-                          onChange={(event) =>
-                            updateField("cardStripColor", event.target.value)
-                          }
-                        />
-                        <strong>{form.cardStripColor}</strong>
-                      </div>
-                    </label>
-                  )}
                 </div>
+
+                <div className="program-type-grid">
+                  <button
+                    type="button"
+                    className={
+                      form.stripDesignMode === "image" ? "selected" : ""
+                    }
+                    onClick={() => updateField("stripDesignMode", "image")}
+                  >
+                    <span>
+                      <ImageIcon size={22} />
+                    </span>
+                    <strong>Usar imagen</strong>
+                    <small>PNG · mínimo 1125 × 432 px · máximo 3 MB.</small>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      form.stripDesignMode === "color" ? "selected" : ""
+                    }
+                    onClick={() => updateField("stripDesignMode", "color")}
+                  >
+                    <span>
+                      <Palette size={22} />
+                    </span>
+                    <strong>Usar color</strong>
+                    <small>Aplica un color sólido al área central.</small>
+                  </button>
+                </div>
+
+                {form.stripDesignMode === "image" ? (
+                  <label className="image-upload">
+                    <span>Imagen central</span>
+
+                    <div>
+                      {previews.stripImage ? (
+                        <img
+                          src={previews.stripImage}
+                          alt="Imagen central actual"
+                        />
+                      ) : (
+                        <ImageIcon size={24} />
+                      )}
+
+                      <strong>
+                        <Upload size={15} />
+                        {previews.stripImage ? "Cambiar" : "Seleccionar PNG"}
+                      </strong>
+                    </div>
+
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={selectStripImage}
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    <span>Color de la parte central</span>
+                    <div className="color-input">
+                      <input
+                        type="color"
+                        value={form.cardStripColor}
+                        onChange={(event) =>
+                          updateField("cardStripColor", event.target.value)
+                        }
+                      />
+                      <strong>{form.cardStripColor}</strong>
+                    </div>
+                  </label>
+                )}
+              </div>
             </div>
 
             {/* <label className="settings-toggle powered-toggle">
@@ -1592,18 +1950,30 @@ export default function CardEditorPage() {
               backgroundColor={form.cardBackgroundColor}
               foregroundColor={form.cardForegroundColor}
               labelColor={form.cardLabelColor}
-              targetValue={Number(form.targetValue) || 0}
+              targetValue={
+                isCashbackProgram ? null : Number(form.targetValue) || 0
+              }
               pointsEarned={Number(form.pointsEarned) || 0}
               amountRequired={Number(form.amountRequired) || 0}
               pointsEarningMethod={form.pointsEarningMethod}
+              cashbackEarningMethod={form.cashbackEarningMethod}
+              cashbackPercentage={Number(form.cashbackPercentage) || 0}
+              cashbackAmount={Number(form.cashbackAmount) || 0}
+              cashbackAmountRequired={Number(form.cashbackAmountRequired) || 0}
+              minimumCashbackRedemption={
+                Number(form.minimumCashbackRedemption) || 0
+              }
+              currency="MXN"
               stripImageUrl={
                 form.stripDesignMode === "image" ? previews.stripImage : null
               }
               stripColor={form.cardStripColor}
               balance={
-                isPointsProgram
-                  ? Math.min(Number(form.targetValue) || 0, 40)
-                  : 4
+                isCashbackProgram
+                  ? 40
+                  : isPointsProgram
+                    ? Math.min(Number(form.targetValue) || 0, 40)
+                    : 4
               }
               rewardsAvailable={0}
               showPoweredByFidara={form.showPoweredByFidara}
