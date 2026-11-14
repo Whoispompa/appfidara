@@ -1,12 +1,11 @@
-// Esta página es la de inicio de sesión de Fidara. 
-// Permite a los usuarios ingresar sus credenciales para acceder a su cuenta y administrar clientes, sellos y recompensas. 
+// Esta página es la de inicio de sesión de Fidara.
+// Permite a los usuarios ingresar sus credenciales para acceder a su cuenta y administrar clientes, sellos y recompensas.
 // Incluye validación de correo electrónico y contraseña, así como opciones para mostrar/ocultar la contraseña y mantener la sesión iniciada.
-
 
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, X } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 
 export default function LoginPage() {
@@ -26,18 +25,27 @@ export default function LoginPage() {
         sessionStorage.removeItem("fidara_registered_email");
       });
   }, []);
-async function submit(
-  event: FormEvent,
-) {
-  event.preventDefault();
+  useEffect(() => {
+    if (!registered) {
+      return;
+    }
 
-  setError("");
-  setLoading(true);
+    const timeout = window.setTimeout(() => {
+      setRegistered(false);
+    }, 4500);
 
-  try {
-    const response = await fetch(
-      "/api/auth/login",
-      {
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [registered]);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
 
         headers: {
@@ -49,49 +57,40 @@ async function submit(
           password,
           remember,
         }),
-      },
-    );
+      });
 
-    const payload = await response
-      .json()
-      .catch(() => ({}));
+      const payload = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      throw new Error(
-        payload.message ??
-          "No pudimos iniciar sesión. Revisa tus datos.",
+      if (!response.ok) {
+        throw new Error(
+          payload.message ?? "No pudimos iniciar sesión. Revisa tus datos.",
+        );
+      }
+
+      const sessionData = payload.data ?? {};
+
+      sessionStorage.setItem("fidara_session", JSON.stringify(sessionData));
+
+      const requestedPath = sessionData.nextPath;
+
+      const nextPath =
+        typeof requestedPath === "string" &&
+        requestedPath.startsWith("/") &&
+        !requestedPath.startsWith("//")
+          ? requestedPath
+          : "/dashboard";
+
+      window.location.assign(nextPath);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Ocurrió un error inesperado.",
       );
+    } finally {
+      setLoading(false);
     }
-
-    const sessionData =
-      payload.data ?? {};
-
-    sessionStorage.setItem(
-      "fidara_session",
-      JSON.stringify(sessionData),
-    );
-
-    const requestedPath =
-      sessionData.nextPath;
-
-    const nextPath =
-      typeof requestedPath === "string" &&
-      requestedPath.startsWith("/") &&
-      !requestedPath.startsWith("//")
-        ? requestedPath
-        : "/dashboard";
-
-    window.location.assign(nextPath);
-  } catch (caught) {
-    setError(
-      caught instanceof Error
-        ? caught.message
-        : "Ocurrió un error inesperado.",
-    );
-  } finally {
-    setLoading(false);
   }
-}
   return (
     <AuthShell mode="login">
       <div className="form-wrap">
@@ -105,11 +104,6 @@ async function submit(
           Ingresa para administrar clientes, sellos y recompensas.
         </p>
         <form className="auth-form" onSubmit={submit}>
-          {registered && (
-            <div className="success-box">
-              Tu negocio ya está registrado. Ahora inicia sesión.
-            </div>
-          )}
           {error && (
             <div className="error-box" role="alert">
               {error}
@@ -173,6 +167,38 @@ async function submit(
           <a href="#">Aviso de privacidad</a>.
         </p>
       </div>
+
+      {registered && (
+        <div
+          className="fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-[390px] items-start gap-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-[0_20px_60px_rgba(0,0,0,0.16)] sm:right-6 sm:top-6"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 size={20} />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <strong className="block text-sm font-extrabold text-black">
+              Tu cuenta está lista
+            </strong>
+
+            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+              Tu negocio fue registrado correctamente. Inicia sesión para
+              configurar tu programa.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setRegistered(false)}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-black"
+            aria-label="Cerrar notificación"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </AuthShell>
   );
 }

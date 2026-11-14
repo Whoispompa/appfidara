@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { SubscriptionPlanSection } from "@/components/subscription-plan-section";
 
 type Profile = {
   id: string;
@@ -431,7 +432,7 @@ export default function ProfilePage() {
             </div>
           </section>
         )}
-
+<SubscriptionPlanSection />
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
           <section className="rounded-[22px] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-6">
             <SectionHeading
