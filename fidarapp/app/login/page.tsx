@@ -101,7 +101,6 @@ export default function LoginPage() {
           en movimiento.
         </h2>
         <p className="form-intro">
-          Ingresa para administrar clientes, sellos y recompensas.
         </p>
         <form className="auth-form" onSubmit={submit}>
           {error && (

@@ -7232,3 +7232,190 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* =========================================================
+   PREVIEW APPLE WALLET GRANDE
+   Ajuste final para catálogo y detalle del programa
+   ========================================================= */
+
+.program-phone-preview {
+  min-height: 720px;
+  padding: 32px 16px;
+}
+
+/* Teléfono ligeramente más grande y proporcionado */
+
+.program-phone-preview .iphone-frame {
+  width: 326px;
+  height: 650px;
+  padding: 68px 10px 28px;
+}
+
+/* Permite que la tarjeta use toda la pantalla disponible */
+
+.program-phone-preview .iphone-screen {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* El pase ahora ocupa prácticamente toda la pantalla */
+
+.program-phone-preview
+  .iphone-screen
+  > .wallet-card-preview.compact {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 14px 14px;
+  border-radius: 16px;
+}
+
+/* Logo ligeramente más grande */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-preview-top {
+  height: 42px;
+  min-height: 42px;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-preview-top
+  img {
+  width: auto;
+  max-width: 90px;
+  height: 38px;
+  object-fit: contain;
+  object-position: left top;
+}
+
+/*
+ * Extiende el strip de sellos hasta los costados.
+ * El fondo o color ahora ocupa una zona más alta.
+ */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-stamps-preview {
+  min-height: 112px;
+  margin: 14px -14px 22px;
+  padding: 14px;
+  align-content: center;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 10px 6px;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+/* Sellos más grandes */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-stamps-preview
+  > span {
+  width: 100%;
+  height: 36px;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-stamps-preview
+  img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+/* Sellos predeterminados */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .stamp-placeholder {
+  width: 28px;
+  height: 28px;
+}
+
+/* Información central más legible */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-preview-stats {
+  gap: 14px;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-preview-stats
+  small {
+  min-height: 22px;
+  font-size: 0.46rem;
+  line-height: 1.3;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-preview-stats
+  strong {
+  font-size: 1.05rem;
+  line-height: 1.05;
+}
+
+/* QR más parecido al tamaño del pase real */
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-qr-preview {
+  width: 114px;
+  margin: auto auto 0;
+  padding: 7px 7px 6px;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-qr-preview
+  svg {
+  width: 96px;
+  height: 96px;
+}
+
+.program-phone-preview
+  .wallet-card-preview.compact
+  .wallet-qr-preview
+  small {
+  margin-top: 3px;
+  font-size: 0.48rem;
+}
+
+/* Ajuste para teléfonos angostos */
+
+@media (max-width: 430px) {
+  .program-phone-preview {
+    min-height: 660px;
+    padding: 22px 8px;
+  }
+
+  .program-phone-preview .iphone-frame {
+    width: min(310px, calc(100vw - 36px));
+    height: 620px;
+    padding: 65px 9px 27px;
+  }
+
+  .program-phone-preview
+    .iphone-screen
+    > .wallet-card-preview.compact {
+    padding-inline: 13px;
+  }
+
+  .program-phone-preview
+    .wallet-card-preview.compact
+    .wallet-stamps-preview {
+    margin-inline: -13px;
+    padding-inline: 13px;
+  }
+}

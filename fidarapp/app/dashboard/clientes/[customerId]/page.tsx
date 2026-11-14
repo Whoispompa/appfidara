@@ -328,6 +328,18 @@ export default function CustomerDetailPage() {
     );
   }
 
+  const latestActivityAt =
+  customer.cards
+    .map((card) => card.lastActivityAt)
+    .filter((value): value is string => Boolean(value))
+    .sort(
+      (a, b) =>
+        new Date(b).getTime() -
+        new Date(a).getTime(),
+    )[0] ??
+  customer.lastVisitAt ??
+  null;
+
   return (
     <main className={styles.page}>
       <Link href="/dashboard/clientes" className={styles.backLink}>
@@ -538,11 +550,15 @@ export default function CustomerDetailPage() {
           </div>
 
           <div className={styles.lastVisit}>
-            <small>Última visita</small>
+            <small>Última actividad</small>
 
-            <strong>
-              {formatDateTime(customer.lastVisitAt, {}, "Sin visitas")}
-            </strong>
+<strong>
+  {formatDateTime(
+    latestActivityAt,
+    {},
+    "Sin actividad",
+  )}
+</strong>
           </div>
         </aside>
 
@@ -639,41 +655,7 @@ export default function CustomerDetailPage() {
                     </div>
                   </div>
 
-                  <div className={styles.loyaltyFooter}>
-                    <div>
-                      <small>Última actividad</small>
-
-                      <strong>
-                        {formatDateTime(
-                          card.lastActivityAt,
-                          {},
-                          "Sin actividad",
-                        )}
-                      </strong>
-
-                      <span className={styles.transactionCount}>
-                        {card.transactionCount}{" "}
-                        {card.transactionCount === 1
-                          ? "movimiento"
-                          : "movimientos"}
-                      </span>
-                    </div>
-
-                    {/* <div className={styles.cardActions}>
-                      <button
-                        type="button"
-                        onClick={() => openRecoveryModal(card)}
-                      >
-                        <QrCode size={15} />
-                        Recuperar tarjeta
-                      </button>
-
-                      <Link href="/dashboard/escanear">
-                        <Stamp size={15} />
-                        Agregar sello
-                      </Link>
-                    </div> */}
-                  </div>
+            
                 </article>
               ))}
             </div>

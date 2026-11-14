@@ -19,6 +19,10 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  GeoPushPanel,
+} from "@/components/marketing/geo-push-panel";
+
+import {
   formatDateTime,
 } from "@/components/lib/date-time";
 
@@ -320,6 +324,8 @@ export default function NotificationsPage() {
             <button type="button" onClick={() => void loadData(true)} className="shrink-0 font-extrabold">Reintentar</button>
           </div>
         )}
+
+        <GeoPushPanel />
 
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <section className="overflow-hidden rounded-[22px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
