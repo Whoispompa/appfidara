@@ -3,10 +3,10 @@
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
 :root {
-  --ink: #171514;
+  --ink: #000000;
   --paper: #fbfaf7;
-  --fidara: #ef4f59;
-  --fidara-dark: #d83d48;
+  --fidara: #e11d48;
+  --fidara-dark: #e11d48;
   --peach: #ffb9a8;
   --mint: #b8eadb;
   --line: #e7e2dc;

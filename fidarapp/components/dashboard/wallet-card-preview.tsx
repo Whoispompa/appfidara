@@ -70,7 +70,7 @@ export function WalletCardPreview({
   currency = "MXN",
 
   stripImageUrl,
-  stripColor = "#14532d",
+  stripColor,
 
   balance = 4,
   rewardsAvailable = 0,
@@ -106,8 +106,18 @@ export function WalletCardPreview({
   const cashbackAvailable =
     minimumRedemption === 0 || numericBalance >= minimumRedemption;
 
+    const effectiveBackgroundColor =
+  backgroundColor?.trim() ||
+  "#1b6726";
+
+const effectiveStripColor =
+  stripColor?.trim() ||
+  effectiveBackgroundColor;
+
   const centralAreaStyle = {
-    backgroundColor: stripImageUrl ? undefined : stripColor || "#14532d",
+  backgroundColor: stripImageUrl
+    ? undefined
+    : effectiveStripColor,
 
     backgroundImage: stripImageUrl
       ? `linear-gradient(
@@ -141,10 +151,10 @@ export function WalletCardPreview({
   const card = (
     <div
       className={`wallet-card-preview ${compact ? "compact" : ""}`}
-      style={{
-        backgroundColor: backgroundColor || "#1b6726",
-        color: foregroundColor || "#ffffff",
-      }}
+style={{
+  backgroundColor: effectiveBackgroundColor,
+  color: foregroundColor || "#ffffff",
+}}
     >
       <div className="wallet-preview-top">
         {logoUrl ? (

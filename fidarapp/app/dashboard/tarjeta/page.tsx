@@ -32,6 +32,9 @@ type ProgramSummary = {
   isRecurring: boolean;
   isActive: boolean;
   cardLogoUrl?: string | null;
+  programType: number;
+  cardStripImageUrl?: string | null;
+  cardStripColor?: string | null;
   activeStampImageUrl?: string | null;
   inactiveStampImageUrl?: string | null;
   cardBackgroundColor?: string | null;
@@ -80,7 +83,7 @@ export default function ProgramsPage() {
   const [notice, setNotice] = useState("");
 
   const [programToDelete, setProgramToDelete] = useState<ProgramSummary | null>(
-    null,
+    null
   );
 
   const [deleting, setDeleting] = useState(false);
@@ -103,7 +106,7 @@ export default function ProgramsPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible cargar las tarjetas.",
+          payload.message ?? "No fue posible cargar las tarjetas."
         );
       }
 
@@ -112,7 +115,7 @@ export default function ProgramsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible cargar las tarjetas.",
+          : "No fue posible cargar las tarjetas."
       );
     } finally {
       setLoading(false);
@@ -144,13 +147,13 @@ export default function ProgramsPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible eliminar la tarjeta.",
+          payload.message ?? "No fue posible eliminar la tarjeta."
         );
       }
 
       if (payload.deleted) {
         setPrograms((current) =>
-          current.filter((program) => program.id !== selectedProgram.id),
+          current.filter((program) => program.id !== selectedProgram.id)
         );
       }
 
@@ -162,8 +165,8 @@ export default function ProgramsPage() {
                   ...program,
                   isActive: false,
                 }
-              : program,
-          ),
+              : program
+          )
         );
       }
 
@@ -174,7 +177,7 @@ export default function ProgramsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible eliminar la tarjeta.",
+          : "No fue posible eliminar la tarjeta."
       );
     } finally {
       setDeleting(false);
@@ -245,7 +248,7 @@ export default function ProgramsPage() {
         {programs.map((program) => {
           const target = Math.max(
             1,
-            Math.round(Number(program.targetValue) || 10),
+            Math.round(Number(program.targetValue) || 10)
           );
 
           const logoUrl = absoluteUrl(program.cardLogoUrl);
@@ -253,6 +256,8 @@ export default function ProgramsPage() {
           const activeStampUrl = absoluteUrl(program.activeStampImageUrl);
 
           const inactiveStampUrl = absoluteUrl(program.inactiveStampImageUrl);
+
+          const stripImageUrl = absoluteUrl(program.cardStripImageUrl);
 
           return (
             <article key={program.id} className="loyalty-program-tile">
@@ -270,12 +275,17 @@ export default function ProgramsPage() {
                 <div className="program-phone-preview">
                   <WalletCardPreview
                     name={program.name}
+                    programType={program.programType}
                     logoUrl={logoUrl}
                     activeStampUrl={activeStampUrl}
                     inactiveStampUrl={inactiveStampUrl}
                     backgroundColor={program.cardBackgroundColor}
                     foregroundColor={program.cardForegroundColor}
                     labelColor={program.cardLabelColor}
+                    stripImageUrl={stripImageUrl}
+                    stripColor={
+                      program.cardStripColor ?? program.cardBackgroundColor
+                    }
                     targetValue={target}
                     balance={4}
                     rewardsAvailable={0}

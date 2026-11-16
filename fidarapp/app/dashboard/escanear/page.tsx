@@ -41,9 +41,9 @@ import { Label } from "@/components/ui/label";
 const Scanner = dynamic(
   () =>
     import("@yudiel/react-qr-scanner").then(
-      (scannerModule) => scannerModule.Scanner,
+      (scannerModule) => scannerModule.Scanner
     ),
-  { ssr: false },
+  { ssr: false }
 );
 
 type CardInformation = {
@@ -204,7 +204,7 @@ export default function ScannerPage() {
 
   const brandLogoUrl = useMemo(
     () => resolveLogoUrl(card?.program.logoUrl ?? card?.organization.logoUrl),
-    [card?.organization.logoUrl, card?.program.logoUrl],
+    [card?.organization.logoUrl, card?.program.logoUrl]
   );
 
   const isPointsProgram = card?.program.programType === 2;
@@ -214,12 +214,12 @@ export default function ScannerPage() {
   const cashbackMinimumToUse = Number(
     card?.minimumCashbackRedemption ??
       card?.program.minimumCashbackRedemption ??
-      0,
+      0
   );
 
   const cashbackRemainingToUnlock = Math.max(
     cashbackMinimumToUse - Number(card?.balance ?? 0),
-    0,
+    0
   );
 
   const cashbackUnlockProgress =
@@ -227,7 +227,7 @@ export default function ScannerPage() {
       ? 100
       : Math.min(
           (Number(card?.balance ?? 0) / cashbackMinimumToUse) * 100,
-          100,
+          100
         );
 
   const isSpendPointsProgram =
@@ -296,7 +296,7 @@ export default function ScannerPage() {
       }
 
       return Number(
-        (Math.floor(amountPaid / amountRequired) * cashbackAmount).toFixed(2),
+        (Math.floor(amountPaid / amountRequired) * cashbackAmount).toFixed(2)
       );
     }
 
@@ -308,8 +308,8 @@ export default function ScannerPage() {
 
     return Boolean(
       (card.walletPassCount ?? 0) > 0 ||
-      card.walletPlatform ||
-      card.walletInstalledAt,
+        card.walletPlatform ||
+        card.walletInstalledAt
     );
   }, [card]);
 
@@ -358,14 +358,14 @@ export default function ScannerPage() {
         toast.error("No se encontró la tarjeta", {
           description: getErrorMessage(
             caught,
-            "No fue posible consultar la tarjeta.",
+            "No fue posible consultar la tarjeta."
           ),
         });
       } finally {
         setLoading(false);
       }
     },
-    [card, loading],
+    [card, loading]
   );
 
   async function submitManualToken(event: FormEvent<HTMLFormElement>) {
@@ -405,7 +405,9 @@ export default function ScannerPage() {
 
     if (cashbackAmount > maximumCashback) {
       toast.error("El cashback ingresado no es válido.", {
-        description: `Puedes utilizar hasta ${formatMoney(maximumCashback)} en esta compra.`,
+        description: `Puedes utilizar hasta ${formatMoney(
+          maximumCashback
+        )} en esta compra.`,
       });
 
       return;
@@ -416,7 +418,7 @@ export default function ScannerPage() {
         description: `El cliente necesita alcanzar el mínimo de ${formatMoney(
           card.minimumCashbackRedemption ??
             card.program.minimumCashbackRedemption ??
-            0,
+            0
         )}.`,
       });
 
@@ -448,24 +450,24 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible registrar la compra.",
+          payload.message ?? "No fue posible registrar la compra."
         );
       }
 
       const cashbackRedeemed = Number(
-        payload.cashbackRedeemed ?? cashbackAmount,
+        payload.cashbackRedeemed ?? cashbackAmount
       );
 
       const cashbackEarned = Number(
-        payload.cashbackEarned ?? estimatedCashback,
+        payload.cashbackEarned ?? estimatedCashback
       );
 
       const amountPaid = Number(
-        payload.purchaseAmount ?? grossPurchaseAmount - cashbackRedeemed,
+        payload.purchaseAmount ?? grossPurchaseAmount - cashbackRedeemed
       );
 
       const newBalance = Number(
-        payload.balance ?? card.balance - cashbackRedeemed + cashbackEarned,
+        payload.balance ?? card.balance - cashbackRedeemed + cashbackEarned
       );
 
       setCard((current) =>
@@ -479,21 +481,21 @@ export default function ScannerPage() {
 
               cashbackAvailable: Boolean(
                 payload.cashbackAvailable ??
-                (newBalance > 0 &&
-                  newBalance >=
-                    Number(
-                      current.minimumCashbackRedemption ??
-                        current.program.minimumCashbackRedemption ??
-                        0,
-                    )),
+                  (newBalance > 0 &&
+                    newBalance >=
+                      Number(
+                        current.minimumCashbackRedemption ??
+                          current.program.minimumCashbackRedemption ??
+                          0
+                      ))
               ),
 
               totalSpent: Number(
-                payload.totalSpent ?? (current.totalSpent ?? 0) + amountPaid,
+                payload.totalSpent ?? (current.totalSpent ?? 0) + amountPaid
               ),
 
               purchaseCount: Number(
-                payload.purchaseCount ?? (current.purchaseCount ?? 0) + 1,
+                payload.purchaseCount ?? (current.purchaseCount ?? 0) + 1
               ),
 
               lifetimeEarned:
@@ -517,7 +519,7 @@ export default function ScannerPage() {
 
               lastActivityAt: new Date().toISOString(),
             }
-          : current,
+          : current
       );
 
       setPurchaseAmount("");
@@ -528,12 +530,12 @@ export default function ScannerPage() {
         description:
           cashbackRedeemed > 0
             ? `${card.customer.name} utilizó ${formatMoney(
-                cashbackRedeemed,
+                cashbackRedeemed
               )}, pagó ${formatMoney(amountPaid)} y obtuvo ${formatMoney(
-                cashbackEarned,
+                cashbackEarned
               )} de cashback.`
             : `${card.customer.name} obtuvo ${formatMoney(
-                cashbackEarned,
+                cashbackEarned
               )} de cashback.`,
       });
     } catch (caught) {
@@ -594,7 +596,7 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible registrar el progreso.",
+          payload.message ?? "No fue posible registrar el progreso."
         );
       }
 
@@ -603,8 +605,8 @@ export default function ScannerPage() {
           (isCashbackProgram
             ? estimatedCashback
             : isPointsProgram
-              ? estimatedPoints
-              : 1),
+            ? estimatedPoints
+            : 1)
       );
       const newBalance = Number(payload.balance ?? card.balance + earnedAmount);
       const target = isCashbackProgram
@@ -628,13 +630,13 @@ export default function ScannerPage() {
               cashbackAvailable: isCashbackProgram
                 ? Boolean(
                     payload.cashbackAvailable ??
-                    (newBalance > 0 &&
-                      newBalance >=
-                        Number(
-                          current.minimumCashbackRedemption ??
-                            current.program.minimumCashbackRedemption ??
-                            0,
-                        )),
+                      (newBalance > 0 &&
+                        newBalance >=
+                          Number(
+                            current.minimumCashbackRedemption ??
+                              current.program.minimumCashbackRedemption ??
+                              0
+                          ))
                   )
                 : current.cashbackAvailable,
 
@@ -643,12 +645,12 @@ export default function ScannerPage() {
                 : current.cashbackBalance,
               totalSpent: Number(
                 payload.totalSpent ??
-                  (current.totalSpent ?? 0) + (validPurchaseAmount ?? 0),
+                  (current.totalSpent ?? 0) + (validPurchaseAmount ?? 0)
               ),
               purchaseCount: Number(
                 payload.purchaseCount ??
                   (current.purchaseCount ?? 0) +
-                    (validPurchaseAmount === null ? 0 : 1),
+                    (validPurchaseAmount === null ? 0 : 1)
               ),
               lifetimeEarned:
                 (current.lifetimeEarned ?? current.balance) + earnedAmount,
@@ -663,7 +665,7 @@ export default function ScannerPage() {
                 ? true
                 : current.checkedInToday,
             }
-          : current,
+          : current
       );
 
       setPurchaseAmount("");
@@ -672,35 +674,35 @@ export default function ScannerPage() {
         isCashbackProgram
           ? "Cashback agregado"
           : isVisitPointsProgram
-            ? "Visita registrada"
-            : isPointsProgram
-              ? "Puntos agregados"
-              : "Sello agregado",
+          ? "Visita registrada"
+          : isPointsProgram
+          ? "Puntos agregados"
+          : "Sello agregado",
         {
           description: isCashbackProgram
             ? `${card.customer.name} obtuvo ${formatMoney(
-                earnedAmount,
+                earnedAmount
               )} de cashback y ahora tiene ${formatMoney(newBalance)}.`
             : isPointsProgram
-              ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
-              : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
-        },
+            ? `${card.customer.name} obtuvo ${earnedAmount} puntos y ahora tiene ${newBalance}.`
+            : `${card.customer.name} ahora tiene ${newBalance} de ${target} sellos.`,
+        }
       );
     } catch (caught) {
       toast.error(
         isCashbackProgram
           ? "No se pudo agregar el cashback"
           : isVisitPointsProgram
-            ? "No se pudo registrar la visita"
-            : isPointsProgram
-              ? "No se pudieron agregar los puntos"
-              : "No se pudo agregar el sello",
+          ? "No se pudo registrar la visita"
+          : isPointsProgram
+          ? "No se pudieron agregar los puntos"
+          : "No se pudo agregar el sello",
         {
           description: getErrorMessage(
             caught,
-            "Ocurrió un error inesperado al registrar el progreso.",
+            "Ocurrió un error inesperado al registrar el progreso."
           ),
-        },
+        }
       );
     } finally {
       setAddingStamp(false);
@@ -726,7 +728,7 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible canjear la recompensa.",
+          payload.message ?? "No fue posible canjear la recompensa."
         );
       }
 
@@ -746,7 +748,7 @@ export default function ScannerPage() {
               lifetimeRedeemed: (current.lifetimeRedeemed ?? 0) + 1,
               transactionCount: (current.transactionCount ?? 0) + 1,
             }
-          : current,
+          : current
       );
 
       setRedeemDialogOpen(false);
@@ -757,7 +759,7 @@ export default function ScannerPage() {
       toast.error("No se pudo canjear", {
         description: getErrorMessage(
           caught,
-          "Ocurrió un error inesperado al canjear la recompensa.",
+          "Ocurrió un error inesperado al canjear la recompensa."
         ),
       });
     } finally {
@@ -974,11 +976,13 @@ export default function ScannerPage() {
 
                         <strong className="mt-1 block text-sm font-extrabold text-black sm:text-base">
                           {card.program.cashbackEarningMethod === 1
-                            ? `${card.program.cashbackPercentage ?? 0}% por compra`
+                            ? `${
+                                card.program.cashbackPercentage ?? 0
+                              }% por compra`
                             : `${formatMoney(
-                                card.program.cashbackAmount,
+                                card.program.cashbackAmount
                               )} por cada ${formatMoney(
-                                card.program.cashbackAmountRequired,
+                                card.program.cashbackAmountRequired
                               )}`}
                         </strong>
                       </div>
@@ -1016,7 +1020,7 @@ export default function ScannerPage() {
                         aria-valuemax={cashbackMinimumToUse}
                         aria-valuenow={Math.min(
                           card.balance,
-                          cashbackMinimumToUse,
+                          cashbackMinimumToUse
                         )}
                       >
                         <span
@@ -1098,7 +1102,10 @@ export default function ScannerPage() {
                     <span
                       className="block h-full rounded-full bg-[#e11d48] transition-[width] duration-300"
                       style={{
-                        width: `${Math.min((card.balance / Math.max(card.target, 1)) * 100, 100)}%`,
+                        width: `${Math.min(
+                          (card.balance / Math.max(card.target, 1)) * 100,
+                          100
+                        )}%`,
                       }}
                     />
                   </div>
@@ -1106,15 +1113,17 @@ export default function ScannerPage() {
                   <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-500">
                     <span>
                       {Math.max(card.target - card.balance, 0).toLocaleString(
-                        "es-MX",
+                        "es-MX"
                       )}{" "}
                       puntos para la meta
                     </span>
                     <span>
                       {isVisitPointsProgram
                         ? `${card.program.pointsEarned ?? 0} puntos por visita`
-                        : `${card.program.pointsEarned ?? 0} puntos por cada $${Number(
-                            card.program.amountRequired ?? 0,
+                        : `${
+                            card.program.pointsEarned ?? 0
+                          } puntos por cada $${Number(
+                            card.program.amountRequired ?? 0
                           ).toLocaleString("es-MX")} MXN`}
                     </span>
                   </div>
@@ -1157,7 +1166,7 @@ export default function ScannerPage() {
                           )}
                         </span>
                       );
-                    },
+                    }
                   )}
                 </div>
               )}
@@ -1228,20 +1237,27 @@ export default function ScannerPage() {
                     {isCashbackProgram
                       ? estimatedCashback > 0
                         ? `Esta compra generará ${formatMoney(
-                            estimatedCashback,
+                            estimatedCashback
                           )} de cashback.`
                         : "Ingresa el total de la compra para calcular el cashback."
                       : isVisitPointsProgram
-                        ? "El total de la compra es opcional para registrar la visita."
-                        : isSpendPointsProgram && estimatedPoints > 0
-                          ? `Esta compra generará ${estimatedPoints} puntos.`
-                          : "Se registrará en el historial de compras del cliente."}
+                      ? "El total de la compra es opcional para registrar la visita."
+                      : isSpendPointsProgram && estimatedPoints > 0
+                      ? `Esta compra generará ${estimatedPoints} puntos.`
+                      : "Se registrará en el historial de compras del cliente."}
                   </p>
                 </div>
               )}
               {isCashbackProgram && (
                 <div className="mt-5 space-y-4">
-                  <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+                  <div
+                    className={`overflow-hidden rounded-[18px] border bg-white transition-all ${
+                      useCashback
+                        ? "border-[#E11D48] ring-4 ring-rose-100"
+                        : "border-slate-300"
+                    }`}
+                  >
+                    {" "}
                     <div className="flex items-center justify-between gap-4 p-4">
                       <div className="flex items-center gap-3">
                         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F3F4F6] text-[#E11D48]">
@@ -1259,7 +1275,7 @@ export default function ScannerPage() {
                               : `Disponible al alcanzar ${formatMoney(
                                   card.minimumCashbackRedemption ??
                                     card.program.minimumCashbackRedemption ??
-                                    0,
+                                    0
                                 )}`}
                           </span>
                         </div>
@@ -1282,18 +1298,33 @@ export default function ScannerPage() {
                             setCashbackToRedeem("");
                           }
                         }}
-                        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-                          useCashback ? "bg-[#E11D48]" : "bg-[#F3F4F6]"
-                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                        className={`relative h-8 w-14 shrink-0 rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-200 ${
+                          useCashback
+                            ? "border-[#E11D48] bg-[#E11D48]"
+                            : "border-slate-400 bg-slate-200 hover:bg-slate-300"
+                        } disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:opacity-70`}
                       >
                         <span
-                          className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all ${
-                            useCashback ? "left-6" : "left-1"
+                          aria-hidden="true"
+                          className={`absolute inset-y-0 flex items-center text-[9px] font-black tracking-wide transition-all ${
+                            useCashback
+                              ? "left-2 text-white"
+                              : "right-1.5 text-slate-600"
                           }`}
-                        />
+                        >
+                          {useCashback ? "SÍ" : "NO"}
+                        </span>
+
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-1 top-1 grid size-6 place-items-center rounded-full bg-white text-[#E11D48] shadow-[0_2px_6px_rgba(15,23,42,0.28)] transition-transform ${
+                            useCashback ? "translate-x-6" : "translate-x-0"
+                          }`}
+                        >
+                          {useCashback && <Check size={14} strokeWidth={3} />}
+                        </span>
                       </button>
                     </div>
-
                     {useCashback && (
                       <div className="border-t border-slate-200 bg-slate-50/70 p-4">
                         <div className="mb-2 flex items-center justify-between gap-3">
@@ -1310,8 +1341,8 @@ export default function ScannerPage() {
                               setCashbackToRedeem(
                                 Math.min(
                                   Number(card.balance),
-                                  Number(purchaseAmount || 0),
-                                ).toFixed(2),
+                                  Number(purchaseAmount || 0)
+                                ).toFixed(2)
                               )
                             }
                             className="text-xs font-extrabold text-[#E11D48] hover:underline"
@@ -1333,7 +1364,7 @@ export default function ScannerPage() {
                             step="0.01"
                             max={Math.min(
                               Number(card.balance),
-                              Number(purchaseAmount || 0),
+                              Number(purchaseAmount || 0)
                             )}
                             value={cashbackToRedeem}
                             onChange={(event) =>
@@ -1344,7 +1375,7 @@ export default function ScannerPage() {
                               Number(cashbackToRedeem || 0) >
                               Math.min(
                                 Number(card.balance),
-                                Number(purchaseAmount || 0),
+                                Number(purchaseAmount || 0)
                               )
                                 ? "border-red-400 focus-visible:ring-red-400"
                                 : "border-slate-200 focus-visible:ring-[#E11D48]"
@@ -1359,15 +1390,15 @@ export default function ScannerPage() {
                         {Number(cashbackToRedeem || 0) >
                           Math.min(
                             Number(card.balance),
-                            Number(purchaseAmount || 0),
+                            Number(purchaseAmount || 0)
                           ) && (
                           <p className="mt-2 text-xs font-semibold text-red-600">
                             Puedes utilizar como máximo{" "}
                             {formatMoney(
                               Math.min(
                                 Number(card.balance),
-                                Number(purchaseAmount || 0),
-                              ),
+                                Number(purchaseAmount || 0)
+                              )
                             )}
                             .
                           </p>
@@ -1396,7 +1427,7 @@ export default function ScannerPage() {
                         <strong className="mt-1 block text-lg text-emerald-300">
                           -
                           {formatMoney(
-                            useCashback ? Number(cashbackToRedeem || 0) : 0,
+                            useCashback ? Number(cashbackToRedeem || 0) : 0
                           )}
                         </strong>
                       </div>
@@ -1413,8 +1444,8 @@ export default function ScannerPage() {
                                 (useCashback
                                   ? Number(cashbackToRedeem || 0)
                                   : 0),
-                              0,
-                            ),
+                              0
+                            )
                           )}
                         </strong>
                       </div>
@@ -1459,7 +1490,7 @@ export default function ScannerPage() {
                               Number(cashbackToRedeem || 0) >
                                 Math.min(
                                   Number(card.balance),
-                                  Number(purchaseAmount || 0),
+                                  Number(purchaseAmount || 0)
                                 ))))) ||
                       (isSpendPointsProgram && estimatedPoints <= 0) ||
                       (isVisitPointsProgram &&
@@ -1483,32 +1514,31 @@ export default function ScannerPage() {
                       ? isCashbackProgram
                         ? "Registrando compra…"
                         : isVisitPointsProgram
-                          ? "Registrando visita…"
-                          : isPointsProgram
-                            ? "Agregando puntos…"
-                            : "Agregando sello…"
+                        ? "Registrando visita…"
+                        : isPointsProgram
+                        ? "Agregando puntos…"
+                        : "Agregando sello…"
                       : isCashbackProgram
-                        ? Number(purchaseAmount) > 0
-                          ? `Registrar compra · ${formatMoney(
-                              Math.max(
-                                Number(purchaseAmount) -
-                                  (useCashback
-                                    ? Number(cashbackToRedeem || 0)
-                                    : 0),
-                                0,
-                              ),
-                            )}`
-                          : "Ingresa una compra válida"
-                        : isVisitPointsProgram
-                          ? card.program.limitOneVisitPerDay &&
-                            card.checkedInToday
-                            ? "Visita registrada hoy"
-                            : `Registrar visita · +${estimatedPoints} puntos`
-                          : isSpendPointsProgram
-                            ? estimatedPoints > 0
-                              ? `Agregar ${estimatedPoints} puntos`
-                              : "Ingresa una compra válida"
-                            : "Agregar 1 sello"}
+                      ? Number(purchaseAmount) > 0
+                        ? `Registrar compra · ${formatMoney(
+                            Math.max(
+                              Number(purchaseAmount) -
+                                (useCashback
+                                  ? Number(cashbackToRedeem || 0)
+                                  : 0),
+                              0
+                            )
+                          )}`
+                        : "Ingresa una compra válida"
+                      : isVisitPointsProgram
+                      ? card.program.limitOneVisitPerDay && card.checkedInToday
+                        ? "Visita registrada hoy"
+                        : `Registrar visita · +${estimatedPoints} puntos`
+                      : isSpendPointsProgram
+                      ? estimatedPoints > 0
+                        ? `Agregar ${estimatedPoints} puntos`
+                        : "Ingresa una compra válida"
+                      : "Agregar 1 sello"}
                   </Button>
                 )}
               </div>
@@ -1573,8 +1603,8 @@ export default function ScannerPage() {
                     isCashbackProgram
                       ? "Cashback acumulado"
                       : isPointsProgram
-                        ? "Puntos históricos"
-                        : "Sellos históricos"
+                      ? "Puntos históricos"
+                      : "Sellos históricos"
                   }
                   value={
                     isCashbackProgram
