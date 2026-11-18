@@ -33,6 +33,15 @@ type ProgramSummary = {
   isActive: boolean;
   cardLogoUrl?: string | null;
   programType: number;
+  couponBenefitType?: number | null;
+  couponBenefitValue?: number | null;
+  couponMinimumPurchase?: number | null;
+  couponMaximumDiscount?: number | null;
+  couponExpirationType?: number | null;
+  couponValidityDays?: number | null;
+  couponFixedExpirationAt?: string | null;
+  couponUsageLimit?: number | null;
+  couponTerms?: string | null;
   cardStripImageUrl?: string | null;
   cardStripColor?: string | null;
   activeStampImageUrl?: string | null;
@@ -83,7 +92,7 @@ export default function ProgramsPage() {
   const [notice, setNotice] = useState("");
 
   const [programToDelete, setProgramToDelete] = useState<ProgramSummary | null>(
-    null
+    null,
   );
 
   const [deleting, setDeleting] = useState(false);
@@ -106,7 +115,7 @@ export default function ProgramsPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible cargar las tarjetas."
+          payload.message ?? "No fue posible cargar las tarjetas.",
         );
       }
 
@@ -115,7 +124,7 @@ export default function ProgramsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible cargar las tarjetas."
+          : "No fue posible cargar las tarjetas.",
       );
     } finally {
       setLoading(false);
@@ -147,13 +156,13 @@ export default function ProgramsPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible eliminar la tarjeta."
+          payload.message ?? "No fue posible eliminar la tarjeta.",
         );
       }
 
       if (payload.deleted) {
         setPrograms((current) =>
-          current.filter((program) => program.id !== selectedProgram.id)
+          current.filter((program) => program.id !== selectedProgram.id),
         );
       }
 
@@ -165,8 +174,8 @@ export default function ProgramsPage() {
                   ...program,
                   isActive: false,
                 }
-              : program
-          )
+              : program,
+          ),
         );
       }
 
@@ -177,7 +186,7 @@ export default function ProgramsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "No fue posible eliminar la tarjeta."
+          : "No fue posible eliminar la tarjeta.",
       );
     } finally {
       setDeleting(false);
@@ -248,7 +257,7 @@ export default function ProgramsPage() {
         {programs.map((program) => {
           const target = Math.max(
             1,
-            Math.round(Number(program.targetValue) || 10)
+            Math.round(Number(program.targetValue) || 10),
           );
 
           const logoUrl = absoluteUrl(program.cardLogoUrl);
@@ -276,6 +285,15 @@ export default function ProgramsPage() {
                   <WalletCardPreview
                     name={program.name}
                     programType={program.programType}
+                    couponBenefitType={program.couponBenefitType ?? 1}
+                    couponBenefitValue={program.couponBenefitValue ?? 10}
+                    couponMinimumPurchase={program.couponMinimumPurchase ?? 0}
+                    couponMaximumDiscount={program.couponMaximumDiscount}
+                    couponExpirationType={program.couponExpirationType ?? 2}
+                    couponValidityDays={program.couponValidityDays ?? 30}
+                    couponFixedExpirationAt={program.couponFixedExpirationAt}
+                    couponUsageLimit={program.couponUsageLimit ?? 1}
+                    couponTerms={program.couponTerms}
                     logoUrl={logoUrl}
                     activeStampUrl={activeStampUrl}
                     inactiveStampUrl={inactiveStampUrl}
@@ -300,7 +318,19 @@ export default function ProgramsPage() {
                 <div>
                   <h2>{program.name}</h2>
 
-                  <p>{program.reward?.name ?? "Recompensa no configurada"}</p>
+                  <p>
+                    {program.programType === 4
+                      ? program.couponBenefitType === 1
+                        ? `${program.couponBenefitValue ?? 0}% de descuento`
+                        : program.couponBenefitType === 2
+                          ? `$${Number(
+                              program.couponBenefitValue ?? 0,
+                            ).toLocaleString("es-MX")} de descuento`
+                          : program.couponBenefitType === 3
+                            ? "Producto gratis"
+                            : "Cupón especial"
+                      : (program.reward?.name ?? "Recompensa no configurada")}
+                  </p>
                 </div>
 
                 <div className="program-metrics">

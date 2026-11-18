@@ -59,6 +59,15 @@ type ProgramInformation = {
   cashbackAmount?: number | null;
   cashbackAmountRequired?: number | null;
   minimumCashbackRedemption?: number | null;
+  couponBenefitType?: number | null;
+  couponBenefitValue?: number | null;
+  couponMinimumPurchase?: number | null;
+  couponMaximumDiscount?: number | null;
+  couponExpirationType?: number | null;
+  couponValidityDays?: number | null;
+  couponFixedExpirationAt?: string | null;
+  couponUsageLimit?: number | null;
+  couponTerms?: string | null;
   isRecurring: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
@@ -86,6 +95,15 @@ type ProgramForm = {
   cashbackAmount: string;
   cashbackAmountRequired: string;
   minimumCashbackRedemption: string;
+  couponBenefitType: number;
+  couponBenefitValue: string;
+  couponMinimumPurchase: string;
+  couponMaximumDiscount: string;
+  couponExpirationType: number;
+  couponValidityDays: string;
+  couponFixedExpirationAt: string;
+  couponUsageLimit: string;
+  couponTerms: string;
   isRecurring: boolean;
   cardBackgroundColor: string;
   cardForegroundColor: string;
@@ -154,6 +172,15 @@ const initialForm: ProgramForm = {
   cashbackAmount: "10",
   cashbackAmountRequired: "200",
   minimumCashbackRedemption: "50",
+  couponBenefitType: 1,
+  couponBenefitValue: "10",
+  couponMinimumPurchase: "0",
+  couponMaximumDiscount: "",
+  couponExpirationType: 2,
+  couponValidityDays: "30",
+  couponFixedExpirationAt: "",
+  couponUsageLimit: "1",
+  couponTerms: "",
   isRecurring: true,
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
@@ -185,6 +212,15 @@ const emptyProgram: ProgramInformation = {
   cashbackAmount: 10,
   cashbackAmountRequired: 200,
   minimumCashbackRedemption: 50,
+  couponBenefitType: 1,
+  couponBenefitValue: 10,
+  couponMinimumPurchase: 0,
+  couponMaximumDiscount: null,
+  couponExpirationType: 2,
+  couponValidityDays: 30,
+  couponFixedExpirationAt: null,
+  couponUsageLimit: 1,
+  couponTerms: null,
   isRecurring: true,
   cardLogoUrl: null,
   activeStampImageUrl: null,
@@ -257,6 +293,9 @@ export default function CardEditorPage() {
   const isStampProgram = form.programType === 1;
   const isPointsProgram = form.programType === 2;
   const isCashbackProgram = form.programType === 3;
+  const isCouponProgram = form.programType === 4;
+
+  const usesTraditionalReward = isStampProgram || isPointsProgram;
 
   const loadProgram = useCallback(async () => {
     setLoading(true);
@@ -339,6 +378,29 @@ export default function CardEditorPage() {
 
         minimumCashbackRedemption: String(data.minimumCashbackRedemption ?? 50),
 
+        couponBenefitType: Number(data.couponBenefitType ?? 1),
+
+        couponBenefitValue: String(data.couponBenefitValue ?? 10),
+
+        couponMinimumPurchase: String(data.couponMinimumPurchase ?? 0),
+
+        couponMaximumDiscount:
+          data.couponMaximumDiscount == null
+            ? ""
+            : String(data.couponMaximumDiscount),
+
+        couponExpirationType: Number(data.couponExpirationType ?? 2),
+
+        couponValidityDays: String(data.couponValidityDays ?? 30),
+
+        couponFixedExpirationAt: data.couponFixedExpirationAt
+          ? data.couponFixedExpirationAt.slice(0, 16)
+          : "",
+
+        couponUsageLimit: String(data.couponUsageLimit ?? 1),
+
+        couponTerms: data.couponTerms ?? "",
+
         isRecurring: data.isRecurring,
 
         cardBackgroundColor: data.cardBackgroundColor ?? "#1b6726",
@@ -398,7 +460,7 @@ export default function CardEditorPage() {
     setSuccess("");
   }
 
-  function selectProgramType(programType: 1 | 2 | 3) {
+  function selectProgramType(programType: 1 | 2 | 3 | 4) {
     setForm((current) => ({
       ...current,
 
@@ -429,6 +491,31 @@ export default function CardEditorPage() {
 
       minimumCashbackRedemption:
         programType === 3 ? current.minimumCashbackRedemption || "50" : "50",
+
+      couponBenefitType: programType === 4 ? current.couponBenefitType || 1 : 1,
+
+      couponBenefitValue:
+        programType === 4 ? current.couponBenefitValue || "10" : "10",
+
+      couponMinimumPurchase:
+        programType === 4 ? current.couponMinimumPurchase || "0" : "0",
+
+      couponMaximumDiscount:
+        programType === 4 ? current.couponMaximumDiscount : "",
+
+      couponExpirationType:
+        programType === 4 ? current.couponExpirationType || 2 : 2,
+
+      couponValidityDays:
+        programType === 4 ? current.couponValidityDays || "30" : "30",
+
+      couponFixedExpirationAt:
+        programType === 4 ? current.couponFixedExpirationAt : "",
+
+      couponUsageLimit:
+        programType === 4 ? current.couponUsageLimit || "1" : "1",
+
+      couponTerms: programType === 4 ? current.couponTerms : "",
     }));
 
     setProgramTypeSelected(true);
@@ -581,7 +668,6 @@ export default function CardEditorPage() {
     if (!program || saving) {
       return;
     }
-
     const targetValue = Number(form.targetValue);
 
     const pointsEarned = Number(form.pointsEarned);
@@ -596,16 +682,23 @@ export default function CardEditorPage() {
 
     const minimumCashbackRedemption = Number(form.minimumCashbackRedemption);
 
+    const couponBenefitValue = Number(form.couponBenefitValue);
+
+    const couponMinimumPurchase = Number(form.couponMinimumPurchase || "0");
+
+    const couponMaximumDiscount =
+      form.couponMaximumDiscount.trim() === ""
+        ? null
+        : Number(form.couponMaximumDiscount);
+
+    const couponValidityDays = Number(form.couponValidityDays);
+
+    const couponUsageLimit = Number(form.couponUsageLimit);
+
     const rewardValue = Number(form.rewardValue || "0");
 
     if (!form.name.trim()) {
       setError("El nombre del programa es obligatorio.");
-
-      return;
-    }
-
-    if (!isCashbackProgram && !form.rewardName.trim()) {
-      setError("El nombre de la recompensa es obligatorio.");
 
       return;
     }
@@ -694,29 +787,90 @@ export default function CardEditorPage() {
       }
     }
 
+    if (isCouponProgram) {
+      if (![1, 2, 3, 4].includes(form.couponBenefitType)) {
+        setError("Selecciona un beneficio válido.");
+        return;
+      }
+
+      if (
+        form.couponBenefitType === 1 &&
+        (!Number.isFinite(couponBenefitValue) ||
+          couponBenefitValue <= 0 ||
+          couponBenefitValue > 100)
+      ) {
+        setError("El porcentaje del cupón debe estar entre 1 y 100.");
+        return;
+      }
+
+      if (
+        form.couponBenefitType === 2 &&
+        (!Number.isFinite(couponBenefitValue) || couponBenefitValue <= 0)
+      ) {
+        setError("El descuento debe ser mayor a cero.");
+        return;
+      }
+
+      if (
+        !Number.isFinite(couponMinimumPurchase) ||
+        couponMinimumPurchase < 0
+      ) {
+        setError("La compra mínima no puede ser negativa.");
+        return;
+      }
+
+      if (
+        couponMaximumDiscount !== null &&
+        (!Number.isFinite(couponMaximumDiscount) ||
+          couponMaximumDiscount <= 0)
+      ) {
+        setError("El descuento máximo debe ser mayor a cero.");
+        return;
+      }
+
+      if (
+        form.couponExpirationType === 1 &&
+        (!form.couponFixedExpirationAt ||
+          Number.isNaN(new Date(form.couponFixedExpirationAt).getTime()))
+      ) {
+        setError("Selecciona una fecha de vencimiento válida.");
+        return;
+      }
+
+      if (
+        form.couponExpirationType === 2 &&
+        (!Number.isInteger(couponValidityDays) || couponValidityDays < 1)
+      ) {
+        setError("Los días de vigencia deben ser mayores a cero.");
+        return;
+      }
+
+      if (!Number.isInteger(couponUsageLimit) || couponUsageLimit < 1) {
+        setError("El cupón debe permitir al menos un uso.");
+        return;
+      }
+    }
+
     if (
-      !isCashbackProgram &&
+      usesTraditionalReward &&
       form.rewardType === 3 &&
       (!Number.isFinite(rewardValue) || rewardValue <= 0 || rewardValue > 100)
     ) {
       setError("El porcentaje de descuento debe estar entre 1 y 100.");
-
       return;
     }
 
-    if (!isCashbackProgram && !form.rewardName.trim()) {
+    if (usesTraditionalReward && !form.rewardName.trim()) {
       setError("El nombre de la recompensa es obligatorio.");
-
       return;
     }
 
     if (
-      !isCashbackProgram &&
+      usesTraditionalReward &&
       form.rewardType === 2 &&
       (!Number.isFinite(rewardValue) || rewardValue <= 0)
     ) {
       setError("El valor del descuento debe ser mayor a cero.");
-
       return;
     }
 
@@ -734,8 +888,8 @@ export default function CardEditorPage() {
       formData.append("ProgramType", String(form.programType));
 
       // Sellos y puntos tienen meta.
-      // Cashback no utiliza TargetValue.
-      if (!isCashbackProgram) {
+      // Cashback y cupones no utilizan TargetValue.
+      if (isStampProgram || isPointsProgram) {
         formData.append("TargetValue", String(targetValue));
       }
 
@@ -784,8 +938,53 @@ export default function CardEditorPage() {
         }
       }
 
-      // La parte central se comparte entre sellos,
-      // puntos y cashback.
+      // Configuración del programa de cupones.
+      if (isCouponProgram) {
+        formData.append("CouponBenefitType", String(form.couponBenefitType));
+
+        if (
+          form.couponBenefitType === 1 ||
+          form.couponBenefitType === 2
+        ) {
+          formData.append("CouponBenefitValue", String(couponBenefitValue));
+        }
+
+        formData.append(
+          "CouponMinimumPurchase",
+          String(couponMinimumPurchase),
+        );
+
+        if (
+          form.couponBenefitType === 1 &&
+          couponMaximumDiscount !== null
+        ) {
+          formData.append(
+            "CouponMaximumDiscount",
+            String(couponMaximumDiscount),
+          );
+        }
+
+        formData.append(
+          "CouponExpirationType",
+          String(form.couponExpirationType),
+        );
+
+        if (form.couponExpirationType === 1) {
+          formData.append(
+            "CouponFixedExpirationAt",
+            new Date(form.couponFixedExpirationAt).toISOString(),
+          );
+        }
+
+        if (form.couponExpirationType === 2) {
+          formData.append("CouponValidityDays", String(couponValidityDays));
+        }
+
+        formData.append("CouponUsageLimit", String(couponUsageLimit));
+        formData.append("CouponTerms", form.couponTerms.trim());
+      }
+
+      // La parte central se comparte entre todos los programas.
       formData.append("CardStripColor", form.cardStripColor);
 
       if (form.stripDesignMode === "image" && files.stripImage) {
@@ -807,8 +1006,9 @@ export default function CardEditorPage() {
 
       formData.append("ShowPoweredByFidara", String(form.showPoweredByFidara));
 
-      // Cashback no utiliza Reward.
-      if (!isCashbackProgram) {
+      // Sellos y puntos utilizan Reward.
+      // Cashback y cupones tienen configuración propia.
+      if (usesTraditionalReward) {
         formData.append("RewardName", form.rewardName.trim());
 
         formData.append("RewardDescription", form.rewardDescription.trim());
@@ -820,7 +1020,7 @@ export default function CardEditorPage() {
         }
       }
 
-      // Logo disponible para los tres programas.
+      // El logo está disponible para todos los programas.
       if (files.logo) {
         formData.append("Logo", files.logo);
       }
@@ -1048,19 +1248,23 @@ export default function CardEditorPage() {
 
               <button
                 type="button"
-                className="card-type-option upcoming"
-                disabled
+                className="card-type-option available"
+                onClick={() => selectProgramType(4)}
               >
                 <span className="card-type-icon">
                   <Ticket size={25} />
                 </span>
+
                 <span className="card-type-copy">
                   <strong>Cupones</strong>
-                  <small>Cupones digitales para campañas y promociones.</small>
+                  <small>
+                    Ofrece descuentos, productos gratis y promociones con
+                    vencimiento.
+                  </small>
                 </span>
-                <span className="card-type-status">Próximamente</span>
-              </button>
 
+                <span className="card-type-status available">Disponible</span>
+              </button>
               <button
                 type="button"
                 className="card-type-option upcoming"
@@ -1166,8 +1370,10 @@ export default function CardEditorPage() {
                   <Stamp size={22} />
                 ) : isPointsProgram ? (
                   <Coins size={22} />
-                ) : (
+                ) : isCashbackProgram ? (
                   <Banknote size={22} />
+                ) : (
+                  <Ticket size={22} />
                 )}
               </span>
 
@@ -1178,7 +1384,9 @@ export default function CardEditorPage() {
                     ? "Programa de sellos"
                     : isPointsProgram
                       ? "Programa de puntos"
-                      : "Programa de cashback"}
+                      : isCashbackProgram
+                        ? "Programa de cashback"
+                        : "Programa de cupones"}
                 </strong>
               </span>
 
@@ -1478,7 +1686,214 @@ export default function CardEditorPage() {
             </section>
           )}
 
-          {!isCashbackProgram && (
+          {isCouponProgram && (
+            <section className="settings-card">
+              <div className="settings-card-heading">
+                <span>
+                  <Ticket size={19} />
+                </span>
+
+                <div>
+                  <h2>Cupón</h2>
+                  <p>Configura el beneficio, vigencia y condiciones.</p>
+                </div>
+              </div>
+
+              <div className="settings-fields reward-fields">
+                <label>
+                  <span>Tipo de beneficio</span>
+
+                  <select
+                    value={form.couponBenefitType}
+                    onChange={(event) =>
+                      updateField(
+                        "couponBenefitType",
+                        Number(event.target.value),
+                      )
+                    }
+                  >
+                    <option value={1}>Descuento porcentual</option>
+                    <option value={2}>Descuento en pesos</option>
+                    <option value={3}>Producto gratis</option>
+                    <option value={4}>Beneficio personalizado</option>
+                  </select>
+                </label>
+
+                {(form.couponBenefitType === 1 ||
+                  form.couponBenefitType === 2) && (
+                  <label>
+                    <span>
+                      {form.couponBenefitType === 1
+                        ? "Porcentaje de descuento"
+                        : "Cantidad de descuento"}
+                    </span>
+
+                    <div className="money-field">
+                      {form.couponBenefitType === 2 && <b>$</b>}
+
+                      <input
+                        type="number"
+                        min={0.01}
+                        max={form.couponBenefitType === 1 ? 100 : undefined}
+                        step={0.01}
+                        value={form.couponBenefitValue}
+                        onChange={(event) =>
+                          updateField(
+                            "couponBenefitValue",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        required
+                      />
+
+                      <small>
+                        {form.couponBenefitType === 1 ? "%" : "MXN"}
+                      </small>
+                    </div>
+                  </label>
+                )}
+
+                <label>
+                  <span>Compra mínima</span>
+
+                  <div className="money-field">
+                    <b>$</b>
+
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={form.couponMinimumPurchase}
+                      onChange={(event) =>
+                        updateField(
+                          "couponMinimumPurchase",
+                          normalizeNumericInput(event.target.value),
+                        )
+                      }
+                    />
+
+                    <small>MXN</small>
+                  </div>
+                </label>
+
+                {form.couponBenefitType === 1 && (
+                  <label>
+                    <span>Descuento máximo</span>
+
+                    <div className="money-field">
+                      <b>$</b>
+
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={form.couponMaximumDiscount}
+                        onChange={(event) =>
+                          updateField(
+                            "couponMaximumDiscount",
+                            normalizeNumericInput(event.target.value),
+                          )
+                        }
+                        placeholder="Sin límite"
+                      />
+
+                      <small>MXN</small>
+                    </div>
+                  </label>
+                )}
+
+                <label>
+                  <span>Tipo de vencimiento</span>
+
+                  <select
+                    value={form.couponExpirationType}
+                    onChange={(event) =>
+                      updateField(
+                        "couponExpirationType",
+                        Number(event.target.value),
+                      )
+                    }
+                  >
+                    <option value={1}>Fecha fija</option>
+                    <option value={2}>Días después de entregarlo</option>
+                    <option value={3}>Sin vencimiento</option>
+                  </select>
+                </label>
+
+                {form.couponExpirationType === 1 && (
+                  <label>
+                    <span>Fecha de vencimiento</span>
+
+                    <input
+                      type="datetime-local"
+                      value={form.couponFixedExpirationAt}
+                      onChange={(event) =>
+                        updateField(
+                          "couponFixedExpirationAt",
+                          event.target.value,
+                        )
+                      }
+                      required
+                    />
+                  </label>
+                )}
+
+                {form.couponExpirationType === 2 && (
+                  <label>
+                    <span>Días de vigencia</span>
+
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={form.couponValidityDays}
+                      onChange={(event) =>
+                        updateField(
+                          "couponValidityDays",
+                          normalizeNumericInput(event.target.value),
+                        )
+                      }
+                      required
+                    />
+                  </label>
+                )}
+
+                <label>
+                  <span>Usos permitidos</span>
+
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.couponUsageLimit}
+                    onChange={(event) =>
+                      updateField(
+                        "couponUsageLimit",
+                        normalizeNumericInput(event.target.value),
+                      )
+                    }
+                    required
+                  />
+                </label>
+
+                <label className="full-field">
+                  <span>Términos y condiciones</span>
+
+                  <textarea
+                    value={form.couponTerms}
+                    onChange={(event) =>
+                      updateField("couponTerms", event.target.value)
+                    }
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="Ej. No acumulable con otras promociones."
+                  />
+                </label>
+              </div>
+            </section>
+          )}
+
+          {usesTraditionalReward && (
             <section className="settings-card">
               <div className="settings-card-heading">
                 <span>
@@ -1951,7 +2366,9 @@ export default function CardEditorPage() {
               foregroundColor={form.cardForegroundColor}
               labelColor={form.cardLabelColor}
               targetValue={
-                isCashbackProgram ? null : Number(form.targetValue) || 0
+                isCashbackProgram || isCouponProgram
+                  ? null
+                  : Number(form.targetValue) || 0
               }
               pointsEarned={Number(form.pointsEarned) || 0}
               amountRequired={Number(form.amountRequired) || 0}
@@ -1963,6 +2380,21 @@ export default function CardEditorPage() {
               minimumCashbackRedemption={
                 Number(form.minimumCashbackRedemption) || 0
               }
+              couponBenefitType={form.couponBenefitType}
+              couponBenefitValue={Number(form.couponBenefitValue) || 0}
+              couponMinimumPurchase={Number(form.couponMinimumPurchase) || 0}
+              couponMaximumDiscount={
+                form.couponMaximumDiscount
+                  ? Number(form.couponMaximumDiscount)
+                  : null
+              }
+              couponExpirationType={form.couponExpirationType}
+              couponValidityDays={Number(form.couponValidityDays) || 0}
+              couponFixedExpirationAt={
+                form.couponFixedExpirationAt || null
+              }
+              couponUsageLimit={Number(form.couponUsageLimit) || 1}
+              couponTerms={form.couponTerms}
               currency="MXN"
               stripImageUrl={
                 form.stripDesignMode === "image" ? previews.stripImage : null
@@ -1971,9 +2403,11 @@ export default function CardEditorPage() {
               balance={
                 isCashbackProgram
                   ? 40
-                  : isPointsProgram
-                    ? Math.min(Number(form.targetValue) || 0, 40)
-                    : 4
+                  : isCouponProgram
+                    ? 0
+                    : isPointsProgram
+                      ? Math.min(Number(form.targetValue) || 0, 40)
+                      : 4
               }
               rewardsAvailable={0}
               showPoweredByFidara={form.showPoweredByFidara}

@@ -26,6 +26,17 @@ type WalletCardPreviewProps = {
   cashbackAmount?: number;
   cashbackAmountRequired?: number;
   minimumCashbackRedemption?: number;
+
+  couponBenefitType?: number;
+  couponBenefitValue?: number | null;
+  couponMinimumPurchase?: number | null;
+  couponMaximumDiscount?: number | null;
+  couponExpirationType?: number;
+  couponValidityDays?: number | null;
+  couponFixedExpirationAt?: string | null;
+  couponUsageLimit?: number;
+  couponTerms?: string | null;
+
   currency?: string;
 
   stripImageUrl?: string | null;
@@ -43,6 +54,14 @@ const moneyFormatter = new Intl.NumberFormat("es-MX", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+function formatCouponDate(date: Date) {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
 
 export function WalletCardPreview({
   name,
@@ -67,6 +86,14 @@ export function WalletCardPreview({
   cashbackAmount = 10,
   cashbackAmountRequired = 200,
   minimumCashbackRedemption = 50,
+
+  couponBenefitType = 1,
+  couponBenefitValue = 10,
+  couponExpirationType = 2,
+  couponValidityDays = 30,
+  couponFixedExpirationAt,
+  couponUsageLimit = 1,
+
   currency = "MXN",
 
   stripImageUrl,
@@ -82,6 +109,7 @@ export function WalletCardPreview({
   const isStampProgram = programType === 1;
   const isPointsProgram = programType === 2;
   const isCashbackProgram = programType === 3;
+  const isCouponProgram = programType === 4;
 
   const numericBalance = Math.max(0, Number(balance) || 0);
 
@@ -91,9 +119,7 @@ export function WalletCardPreview({
   );
 
   const progressBalance = Math.min(numericBalance, target);
-
   const visibleStamps = Math.min(Math.round(target), 10);
-
   const pointsProgress = Math.min((progressBalance / target) * 100, 100);
 
   const minimumRedemption = Math.max(0, Number(minimumCashbackRedemption) || 0);
@@ -106,19 +132,11 @@ export function WalletCardPreview({
   const cashbackAvailable =
     minimumRedemption === 0 || numericBalance >= minimumRedemption;
 
-    const effectiveBackgroundColor =
-  backgroundColor?.trim() ||
-  "#1b6726";
-
-const effectiveStripColor =
-  stripColor?.trim() ||
-  effectiveBackgroundColor;
+  const effectiveBackgroundColor = backgroundColor?.trim() || "#1b6726";
+  const effectiveStripColor = stripColor?.trim() || effectiveBackgroundColor;
 
   const centralAreaStyle = {
-  backgroundColor: stripImageUrl
-    ? undefined
-    : effectiveStripColor,
-
+    backgroundColor: stripImageUrl ? undefined : effectiveStripColor,
     backgroundImage: stripImageUrl
       ? `linear-gradient(
           rgba(0, 0, 0, 0.3),
@@ -126,7 +144,6 @@ const effectiveStripColor =
         ),
         url("${stripImageUrl}")`
       : undefined,
-
     backgroundPosition: "center",
     backgroundSize: "cover",
     backgroundRepeat: "no-repeat",
@@ -148,13 +165,54 @@ const effectiveStripColor =
         )} gastados`
       : `${Number(cashbackPercentage) || 0}% de cashback por compra`;
 
+  const couponBenefitText = (() => {
+    switch (couponBenefitType) {
+      case 1:
+        return `${Number(couponBenefitValue) || 0}% de descuento`;
+      case 2:
+        return `$${moneyFormatter.format(
+          Number(couponBenefitValue) || 0,
+        )} ${currency} de descuento`;
+      case 3:
+        return "Producto gratis";
+      case 4:
+        return "Beneficio especial";
+      default:
+        return "Cupón disponible";
+    }
+  })();
+
+  const couponExpirationText = (() => {
+    if (couponExpirationType === 3) {
+      return "Sin vencimiento";
+    }
+
+    if (couponExpirationType === 1 && couponFixedExpirationAt) {
+      const fixedDate = new Date(couponFixedExpirationAt);
+
+      if (!Number.isNaN(fixedDate.getTime())) {
+        return formatCouponDate(fixedDate);
+      }
+    }
+
+    if (couponExpirationType === 2) {
+      const expirationDate = new Date();
+      expirationDate.setDate(
+        expirationDate.getDate() + Math.max(1, Number(couponValidityDays) || 1),
+      );
+      return formatCouponDate(expirationDate);
+    }
+
+    return "Sin vencimiento";
+  })();
+
   const card = (
     <div
       className={`wallet-card-preview ${compact ? "compact" : ""}`}
-style={{
-  backgroundColor: effectiveBackgroundColor,
-  color: foregroundColor || "#ffffff",
-}}
+      style={{
+        backgroundColor: effectiveBackgroundColor,
+        color: foregroundColor || "#ffffff",
+      }}
     >
       <div className="wallet-preview-top">
         {logoUrl ? (
@@ -175,9 +233,7 @@ style={{
             <small style={{ color: labelColor || "#f5f1e8" }}>
               PUNTOS DISPONIBLES
             </small>
-
             <strong>{progressBalance.toLocaleString("es-MX")} puntos</strong>
-
             <span>{pointsRule}</span>
           </div>
 
@@ -203,11 +259,9 @@ style={{
             <small style={{ color: labelColor || "#f5f1e8" }}>
               SALDO CASHBACK
             </small>
-
             <strong>
               ${moneyFormatter.format(numericBalance)} {currency}
             </strong>
-
             <span>{cashbackRule}</span>
           </div>
 
@@ -220,11 +274,38 @@ style={{
         </div>
       )}
 
+      {isCouponProgram && (
+        <div className="wallet-coupon-preview">
+          <div className="wallet-coupon-main">
+            <strong>{couponBenefitText}</strong>
+            <span>BENEFICIO</span>
+          </div>
+
+          <div className="wallet-coupon-details">
+            <div>
+              <small style={{ color: labelColor || "#f5f1e8" }}>ESTADO</small>
+              <strong>Disponible</strong>
+            </div>
+
+            <div>
+              <small style={{ color: labelColor || "#f5f1e8" }}>VENCE</small>
+              <strong>{couponExpirationText}</strong>
+            </div>
+
+            <div>
+              <small style={{ color: labelColor || "#f5f1e8" }}>
+                USOS RESTANTES
+              </small>
+              <strong>{Math.max(1, Number(couponUsageLimit) || 1)}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isStampProgram && (
         <div className="wallet-stamps-preview" style={centralAreaStyle}>
           {Array.from({ length: visibleStamps }).map((_, index) => {
             const completed = index < progressBalance;
-
             const imageUrl = completed ? activeStampUrl : inactiveStampUrl;
 
             return (
@@ -244,43 +325,45 @@ style={{
         </div>
       )}
 
-      <div className="wallet-preview-stats">
-        <div>
-          <small style={{ color: labelColor || "#f5f1e8" }}>
-            {isCashbackProgram
-              ? "MÍNIMO PARA USAR"
-              : isPointsProgram
-                ? "META DE PUNTOS"
-                : "TU PROGRESO"}
-          </small>
+      {!isCouponProgram && (
+        <div className="wallet-preview-stats">
+          <div>
+            <small style={{ color: labelColor || "#f5f1e8" }}>
+              {isCashbackProgram
+                ? "MÍNIMO PARA USAR"
+                : isPointsProgram
+                  ? "META DE PUNTOS"
+                  : "TU PROGRESO"}
+            </small>
 
-          <strong>
-            {isCashbackProgram
-              ? `$${moneyFormatter.format(minimumRedemption)} ${currency}`
-              : isPointsProgram
-                ? `${target.toLocaleString("es-MX")} puntos`
-                : `${progressBalance} de ${target}`}
-          </strong>
+            <strong>
+              {isCashbackProgram
+                ? `$${moneyFormatter.format(minimumRedemption)} ${currency}`
+                : isPointsProgram
+                  ? `${target.toLocaleString("es-MX")} puntos`
+                  : `${progressBalance} de ${target}`}
+            </strong>
+          </div>
+
+          <div>
+            <small style={{ color: labelColor || "#f5f1e8" }}>
+              {isCashbackProgram
+                ? "DISPONIBLE PARA USAR"
+                : "RECOMPENSAS DISPONIBLES"}
+            </small>
+
+            <strong>
+              {isCashbackProgram
+                ? cashbackAvailable
+                  ? `$${moneyFormatter.format(numericBalance)} ${currency}`
+                  : "Aún no"
+                : `${rewardsAvailable} ${
+                    rewardsAvailable === 1 ? "recompensa" : "recompensas"
+                  }`}
+            </strong>
+          </div>
         </div>
-
-        <div>
-          <small style={{ color: labelColor || "#f5f1e8" }}>
-            {isCashbackProgram
-              ? "DISPONIBLE PARA USAR"
-              : "RECOMPENSAS DISPONIBLES"}
-          </small>
-
-          <strong>
-            {isCashbackProgram
-              ? cashbackAvailable
-                ? `$${moneyFormatter.format(numericBalance)} ${currency}`
-                : "Aún no"
-              : `${rewardsAvailable} ${
-                  rewardsAvailable === 1 ? "recompensa" : "recompensas"
-                }`}
-          </strong>
-        </div>
-      </div>
+      )}
 
       <div className="wallet-qr-preview">
         <QRCodeSVG
