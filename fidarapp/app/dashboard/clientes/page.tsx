@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   CreditCard,
   LoaderCircle,
   Search,
@@ -19,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import {useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import styles from "./customers.module.css";
 
@@ -66,12 +66,6 @@ type StatusConfirmation = {
   nextStatus: boolean;
 } | null;
 
-type ToastMessage = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-} | null;
-
 const initialPagination: Pagination = {
   page: 1,
   pageSize: 20,
@@ -104,7 +98,6 @@ export default function CustomersPage() {
   );
   const [statusConfirmation, setStatusConfirmation] =
     useState<StatusConfirmation>(null);
-  const [toast, setToast] = useState<ToastMessage>(null);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -154,13 +147,6 @@ export default function CustomersPage() {
   useEffect(() => {
     void loadCustomers();
   }, [loadCustomers]);
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timeout = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
 
   useEffect(() => {
     if (!statusConfirmation) return;
@@ -228,18 +214,14 @@ useEffect(() => {
         ),
       );
 
-      setToast({
-        type: "success",
-        title: nextStatus ? "Cliente reactivado" : "Cliente desactivado",
-        message: nextStatus
+      toast.success(nextStatus ? "Cliente reactivado" : "Cliente desactivado", {
+        description: nextStatus
           ? `${customer.fullName} vuelve a estar activo.`
           : `${customer.fullName} fue desactivado correctamente.`,
       });
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No pudimos actualizar al cliente",
-        message:
+      toast.error("No pudimos actualizar al cliente", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -635,34 +617,6 @@ useEffect(() => {
         </div>
       )}
 
-      {toast && (
-        <div
-          className={`${styles.toast} ${
-            toast.type === "success" ? styles.toastSuccess : styles.toastError
-          }`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className={styles.toastIcon}>
-            {toast.type === "success" ? (
-              <CheckCircle2 size={19} />
-            ) : (
-              <AlertTriangle size={19} />
-            )}
-          </span>
-          <div>
-            <strong>{toast.title}</strong>
-            <p>{toast.message}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="Cerrar notificación"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </main>
   );
 }

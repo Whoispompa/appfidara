@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   Bell,
-  CheckCircle2,
   ImageIcon,
   LoaderCircle,
   Palette,
@@ -20,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 type Program = {
   id: string;
@@ -58,12 +58,6 @@ type UpdateResult = {
   };
 };
 
-type Toast = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-} | null;
-
 const acceptedTypes = ["image/png", "image/jpeg", "image/webp"];
 const maximumBytes = 5 * 1024 * 1024;
 
@@ -77,7 +71,6 @@ export default function ConfigurationPage() {
   const [saving, setSaving] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState<Toast>(null);
 
   const selectedProgram = useMemo(
     () => data?.programs.find((program) => program.id === programId),
@@ -124,12 +117,6 @@ export default function ConfigurationPage() {
   }, []);
 
   useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 4200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
-
-  useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
@@ -149,19 +136,15 @@ export default function ConfigurationPage() {
     if (!file) return;
 
     if (!acceptedTypes.includes(file.type)) {
-      setToast({
-        type: "error",
-        title: "Formato no compatible",
-        message: "Selecciona una imagen PNG, JPG o WebP.",
+      toast.error("Formato no compatible", {
+        description: "Selecciona una imagen PNG, JPG o WebP.",
       });
       return;
     }
 
     if (file.size > maximumBytes) {
-      setToast({
-        type: "error",
-        title: "Archivo demasiado grande",
-        message: "El logo no puede pesar más de 5 MB.",
+      toast.error("Archivo demasiado grande", {
+        description: "El logo no puede pesar más de 5 MB.",
       });
       return;
     }
@@ -260,19 +243,15 @@ export default function ConfigurationPage() {
       clearSelection();
 
       const sent = updated.applePush?.sent ?? 0;
-      setToast({
-        type: "success",
-        title: "Identidad actualizada",
-        message:
+      toast.success("Identidad actualizada", {
+        description:
           sent > 0
             ? `El logo se guardó y se notificaron ${sent} dispositivos.`
             : "El logo se guardó correctamente para las próximas tarjetas.",
       });
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No se pudo guardar",
-        message:
+      toast.error("No se pudo guardar", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -524,35 +503,6 @@ export default function ConfigurationPage() {
         )}
       </div>
 
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[200] flex w-[calc(100%_-_2rem)] max-w-sm items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_20px_60px_rgba(17,24,39,0.18)] ${
-            toast.type === "success" ? "border-emerald-200" : "border-rose-200"
-          }`}
-          role="status"
-        >
-          <span
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-              toast.type === "success"
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-rose-50 text-[#E11D48]"
-            }`}
-          >
-            {toast.type === "success" ? (
-              <CheckCircle2 size={18} />
-            ) : (
-              <AlertTriangle size={18} />
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <strong className="block text-sm font-extrabold">{toast.title}</strong>
-            <p className="mt-1 text-xs leading-5 text-[#6B7280]">{toast.message}</p>
-          </div>
-          <button type="button" onClick={() => setToast(null)} className="grid h-8 w-8 place-items-center text-[#6B7280]">
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </main>
   );
 }

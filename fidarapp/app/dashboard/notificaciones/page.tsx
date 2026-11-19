@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import {
   GeoPushPanel,
@@ -64,12 +65,6 @@ type ApiEnvelope<T> = {
   message?: string;
   data?: T;
 };
-
-type Toast = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-} | null;
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
   day: "numeric",
@@ -132,7 +127,6 @@ export default function NotificationsPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [toast, setToast] = useState<Toast>(null);
 
   const goToLogin = useCallback(() => {
     sessionStorage.removeItem("fidara_session");
@@ -207,12 +201,6 @@ export default function NotificationsPage() {
   }, [hasActiveCampaign, loadData]);
 
   useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
-
-  useEffect(() => {
     if (!confirmationOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -266,17 +254,13 @@ export default function NotificationsPage() {
       setTitle("");
       setMessage("");
       setAudience("all");
-      setToast({
-        type: "success",
-        title: "Campaña en cola",
-        message: "Fidara comenzó a preparar el envío a las tarjetas Wallet.",
+      toast.success("Campaña en cola", {
+        description: "Fidara comenzó a preparar el envío a las tarjetas Wallet.",
       });
       await loadData(false);
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No se pudo enviar",
-        message: caught instanceof Error ? caught.message : "Ocurrió un error inesperado.",
+      toast.error("No se pudo enviar", {
+        description: caught instanceof Error ? caught.message : "Ocurrió un error inesperado.",
       });
     } finally {
       setSending(false);
@@ -428,13 +412,6 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {toast && (
-        <div className={`fixed right-4 top-4 z-[200] flex w-[calc(100%_-_2rem)] max-w-sm items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_20px_60px_rgba(17,24,39,0.18)] ${toast.type === "success" ? "border-emerald-200" : "border-rose-200"}`} role="status">
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${toast.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-[#E11D48]"}`}>{toast.type === "success" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}</span>
-          <div className="min-w-0 flex-1"><strong className="block text-sm font-extrabold">{toast.title}</strong><p className="mt-1 text-xs leading-5 text-[#6B7280]">{toast.message}</p></div>
-          <button type="button" onClick={() => setToast(null)} className="grid h-8 w-8 place-items-center text-[#6B7280]"><X size={16} /></button>
-        </div>
-      )}
     </main>
   );
 }

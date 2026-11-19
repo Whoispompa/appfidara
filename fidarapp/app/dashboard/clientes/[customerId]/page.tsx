@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
-  CheckCircle2,
   Copy,
   CreditCard,
   ExternalLink,
@@ -26,6 +25,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import styles from "./customer-detail.module.css";
 
@@ -76,12 +76,6 @@ type CustomerResponse = {
   data: CustomerDetail;
 };
 
-type ToastMessage = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-} | null;
-
 const getAppUrl =
   process.env.NEXT_PUBLIC_GET_APP_URL ?? "https://get.fidara.mx";
 
@@ -105,8 +99,6 @@ export default function CustomerDetailPage() {
   const [copiedCardId, setCopiedCardId] = useState<string | null>(null);
   const [recoveryCard, setRecoveryCard] = useState<CustomerCard | null>(null);
   const [recoveryLinkCopied, setRecoveryLinkCopied] = useState(false);
-  const [toast, setToast] = useState<ToastMessage>(null);
-
   const recoveryUrl = recoveryCard?.qrToken
     ? `${getAppUrl}/card/${encodeURIComponent(recoveryCard.qrToken)}`
     : "";
@@ -153,16 +145,6 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     void loadCustomer();
   }, [loadCustomer]);
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timeout = window.setTimeout(() => {
-      setToast(null);
-    }, 3200);
-
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
 
   useEffect(() => {
     if (!recoveryCard && !statusConfirmationOpen) return;
@@ -232,18 +214,14 @@ export default function CustomerDetailPage() {
           : current,
       );
 
-      setToast({
-        type: "success",
-        title: nextStatus ? "Cliente reactivado" : "Cliente desactivado",
-        message: nextStatus
+      toast.success(nextStatus ? "Cliente reactivado" : "Cliente desactivado", {
+        description: nextStatus
           ? `${customer.fullName} vuelve a estar activo.`
           : `${customer.fullName} fue desactivado correctamente.`,
       });
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No pudimos actualizar al cliente",
-        message:
+      toast.error("No pudimos actualizar al cliente", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -262,20 +240,16 @@ export default function CustomerDetailPage() {
         setCopiedCardId(null);
       }, 1800);
     } catch {
-      setToast({
-        type: "error",
-        title: "No se pudo copiar",
-        message: "No fue posible copiar el número de tarjeta.",
+      toast.error("No se pudo copiar", {
+        description: "No fue posible copiar el número de tarjeta.",
       });
     }
   }
 
   function openRecoveryModal(card: CustomerCard) {
     if (!card.qrToken) {
-      setToast({
-        type: "error",
-        title: "Recuperación no disponible",
-        message:
+      toast.error("Recuperación no disponible", {
+        description:
           "Esta tarjeta todavía no tiene disponible su enlace de recuperación.",
       });
       return;
@@ -301,10 +275,8 @@ export default function CustomerDetailPage() {
         setRecoveryLinkCopied(false);
       }, 1800);
     } catch {
-      setToast({
-        type: "error",
-        title: "No se pudo copiar",
-        message: "No fue posible copiar el enlace de recuperación.",
+      toast.error("No se pudo copiar", {
+        description: "No fue posible copiar el enlace de recuperación.",
       });
     }
   }
@@ -827,36 +799,6 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      {toast && (
-        <div
-          className={`${styles.toast} ${
-            toast.type === "success" ? styles.toastSuccess : styles.toastError
-          }`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className={styles.toastIcon}>
-            {toast.type === "success" ? (
-              <CheckCircle2 size={19} />
-            ) : (
-              <AlertTriangle size={19} />
-            )}
-          </span>
-
-          <div>
-            <strong>{toast.title}</strong>
-            <p>{toast.message}</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="Cerrar notificación"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </main>
   );
 }

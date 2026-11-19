@@ -13,6 +13,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 type ProgramSummary = {
   id: string;
@@ -83,9 +84,6 @@ export function GeoPushPanel() {
   const [error, setError] =
     useState("");
 
-  const [success, setSuccess] =
-    useState("");
-
   const loadPrograms = useCallback(async () => {
     setLoadingPrograms(true);
 
@@ -152,7 +150,6 @@ export function GeoPushPanel() {
 
       setLoadingConfiguration(true);
       setError("");
-      setSuccess("");
 
       try {
         const response = await fetch(
@@ -258,7 +255,6 @@ export function GeoPushPanel() {
 
     setSaving(true);
     setError("");
-    setSuccess("");
 
     try {
       const response = await fetch(
@@ -292,10 +288,13 @@ export function GeoPushPanel() {
         );
       }
 
-      setSuccess(
-        enabled
-          ? "GeoPush quedó activo y las tarjetas Apple fueron actualizadas."
-          : "GeoPush fue desactivado.",
+      toast.success(
+        enabled ? "GeoPush activado" : "GeoPush desactivado",
+        {
+          description: enabled
+            ? "Las tarjetas Apple fueron actualizadas."
+            : "La configuración se guardó correctamente.",
+        },
       );
 
       await loadConfiguration(programId);
@@ -520,12 +519,6 @@ export function GeoPushPanel() {
                 {error && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">
                     {error}
-                  </div>
-                )}
-
-                {success && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
-                    {success}
                   </div>
                 )}
 

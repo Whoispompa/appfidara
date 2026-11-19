@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { WalletCardPreview } from "@/components/dashboard/wallet-card-preview";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,8 +90,6 @@ export default function ProgramsPage() {
 
   const [error, setError] = useState("");
 
-  const [notice, setNotice] = useState("");
-
   const [programToDelete, setProgramToDelete] = useState<ProgramSummary | null>(
     null,
   );
@@ -140,7 +139,6 @@ export default function ProgramsPage() {
 
     setDeleting(true);
     setError("");
-    setNotice("");
 
     try {
       const response = await fetch(`/api/programs/${selectedProgram.id}`, {
@@ -179,15 +177,22 @@ export default function ProgramsPage() {
         );
       }
 
-      setNotice(payload.message ?? "La tarjeta fue procesada correctamente.");
+      toast.success(
+        payload.archived ? "Tarjeta archivada" : "Tarjeta eliminada",
+        {
+          description:
+            payload.message ?? "La tarjeta fue procesada correctamente.",
+        },
+      );
 
       setProgramToDelete(null);
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "No fue posible eliminar la tarjeta.",
-      );
+      toast.error("No se pudo procesar la tarjeta", {
+        description:
+          caught instanceof Error
+            ? caught.message
+            : "No fue posible eliminar la tarjeta.",
+      });
     } finally {
       setDeleting(false);
     }
@@ -225,13 +230,6 @@ export default function ProgramsPage() {
           Crear tarjeta
         </Link>
       </header>
-
-      {notice && (
-        <div className="programs-notice">
-          <Check size={18} />
-          {notice}
-        </div>
-      )}
 
       {error && (
         <div className="programs-error">
@@ -358,7 +356,6 @@ export default function ProgramsPage() {
                     type="button"
                     className="delete-program-button"
                     onClick={() => {
-                      setNotice("");
                       setError("");
                       setProgramToDelete(program);
                     }}

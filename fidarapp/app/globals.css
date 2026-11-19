@@ -646,7 +646,7 @@ input {
   flex-direction: column;
 
   overflow: hidden;
-  background: #171514;
+  background: #000000;
   color: #ffffff;
 
   transition:
@@ -765,7 +765,7 @@ input {
 
 .sidebar-link.scan-link {
   margin: 8px 0 14px;
-  background: #ef4f59;
+  background: #e11d48;
   color: #ffffff;
 }
 
@@ -998,7 +998,7 @@ input {
   display: block;
   margin-bottom: 8px;
 
-  color: #ef4f59;
+  color: #e11d48;
 
   font-size: 11px;
   font-weight: 800;
@@ -1029,7 +1029,7 @@ input {
 
   border-radius: 14px;
 
-  background: #ef4f59;
+  background: #e11d48;
   color: #ffffff;
 
   text-decoration: none;
@@ -1754,9 +1754,9 @@ input {
   min-height: 50px;
   padding: 0 18px;
 
-  border: 1px solid #ef4f59;
+  border: 1px solid #e11d48;
 
-  background: #ef4f59;
+  background: #e11d48;
   color: #ffffff;
 
   box-shadow: 0 9px 24px rgba(239, 79, 89, 0.2);
@@ -1925,7 +1925,7 @@ input {
 }
 
 .manual-token-form input:focus {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 0 0 4px rgba(239, 79, 89, 0.1);
 }
 
@@ -1983,7 +1983,7 @@ input {
 }
 
 .customer-card-header small {
-  color: #ef4f59;
+  color: #e11d48;
 
   font-size: 10px;
   font-weight: 850;
@@ -2121,7 +2121,7 @@ input {
   background:
     linear-gradient(
       90deg,
-      #ef4f59,
+      #e11d48,
       #ff7b80
     );
 
@@ -2556,7 +2556,7 @@ input {
 .card-editor-heading small {
   display: block;
   margin-bottom: 10px;
-  color: #ef4f59;
+  color: #e11d48;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -2590,7 +2590,7 @@ input {
   padding: 0 21px;
   border: 0;
   border-radius: 13px;
-  background: #ef4f59;
+  background: #e11d48;
   color: #fff;
   box-shadow: 0 12px 25px rgba(239, 79, 89, 0.22);
   cursor: pointer;
@@ -2670,7 +2670,7 @@ input {
 .settings-card-heading small {
   display: block;
   margin-bottom: 5px;
-  color: #ef4f59;
+  color: #e11d48;
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -2746,7 +2746,7 @@ input {
 .settings-fields textarea:focus,
 .reward-fields input:focus,
 .reward-fields textarea:focus {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
 }
 
@@ -2830,7 +2830,7 @@ input {
 
 .settings-toggle input:checked ~ .toggle-control,
 .powered-toggle input:checked ~ .toggle-control {
-  background: #ef4f59;
+  background: #e11d48;
 }
 
 .settings-toggle input:checked ~ .toggle-control::after,
@@ -2916,7 +2916,7 @@ input {
 }
 
 .image-upload:hover {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff6f6;
   transform: translateY(-1px);
 }
@@ -2982,7 +2982,7 @@ input {
 .wallet-preview-sticky > small {
   display: block;
   margin-bottom: 7px;
-  color: #ef4f59;
+  color: #e11d48;
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -3349,7 +3349,7 @@ input {
   gap: 8px;
   padding: 0 19px;
   border-radius: 13px;
-  background: #ef4f59;
+  background: #e11d48;
   color: #fff;
   box-shadow: 0 12px 26px
     rgba(239, 79, 89, 0.24);
@@ -3416,7 +3416,7 @@ input {
 }
 
 .new-program-tile:hover {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   transform: translateY(-3px);
 }
 
@@ -3624,7 +3624,7 @@ input {
 }
 
 .edit-program-button:hover {
-  background: #ef4f59;
+  background: #e11d48;
   transform: translateY(-1px);
 }
 
@@ -3713,7 +3713,7 @@ input {
 }
 
 .delete-program-button:hover {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff0f1;
   color: #d93843;
   transform: translateY(-1px);
@@ -4257,7 +4257,7 @@ input {
   padding: 0 16px;
   border: 0;
   border-radius: 10px;
-  background: #ef4f59;
+  background: #e11d48;
   color: #fff;
   cursor: pointer;
   font-weight: 700;
@@ -4337,7 +4337,7 @@ input {
   height: 27px;
   place-items: center;
   border-radius: 50%;
-  background: #ef4f59;
+  background: #e11d48;
   color: #fff;
   font-size: 0.75rem;
   font-weight: 800;
@@ -4358,7 +4358,7 @@ input {
 }
 
 .marketing-reward small {
-  color: #ef4f59;
+  color: #e11d48;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -6265,12 +6265,12 @@ body {
 }
 
 .program-type-grid button:hover:not(:disabled) {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
 }
 
 .program-type-grid button.selected {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff6f7;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
 }
@@ -6286,7 +6286,7 @@ body {
   place-items: center;
   border-radius: 12px;
   background: #fff0f2;
-  color: #ef4f59;
+  color: #e11d48;
 }
 
 .program-type-grid strong {
@@ -6323,7 +6323,7 @@ body {
 
 .settings-fields select:focus,
 .reward-fields select:focus {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
 }
 
@@ -6479,12 +6479,12 @@ body {
 }
 
 .program-type-grid button:hover:not(:disabled) {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
 }
 
 .program-type-grid button.selected {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff6f7;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
 }
@@ -6500,7 +6500,7 @@ body {
   place-items: center;
   border-radius: 12px;
   background: #fff0f2;
-  color: #ef4f59;
+  color: #e11d48;
 }
 
 .program-type-grid strong {
@@ -6585,7 +6585,7 @@ body {
 
 .settings-fields select:focus,
 .reward-fields select:focus {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
 }
 
@@ -6781,8 +6781,8 @@ body {
 }
 
 .card-type-modal-close:hover {
-  border-color: #ef4f59;
-  color: #ef4f59;
+  border-color: #e11d48;
+  color: #e11d48;
 }
 
 .card-type-catalog {
@@ -6814,7 +6814,7 @@ body {
 
 .card-type-option.available:hover {
   transform: translateY(-2px);
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff8f8;
   box-shadow: 0 14px 32px rgba(239, 79, 89, 0.12);
 }
@@ -6832,7 +6832,7 @@ body {
   place-items: center;
   border-radius: 14px;
   background: #fff0f2;
-  color: #ef4f59;
+  color: #e11d48;
 }
 
 .card-type-option.upcoming .card-type-icon {
@@ -6897,7 +6897,7 @@ body {
   place-items: center;
   border-radius: 13px;
   background: #fff0f2;
-  color: #ef4f59;
+  color: #e11d48;
 }
 
 .selected-program-summary > span:nth-child(2) {
@@ -6920,7 +6920,7 @@ body {
   border: 1px solid #e1dad5;
   border-radius: 10px;
   background: #fff;
-  color: #ef4f59;
+  color: #e11d48;
   font: inherit;
   font-size: 0.74rem;
   font-weight: 800;
@@ -6928,7 +6928,7 @@ body {
 }
 
 .selected-program-summary button:hover {
-  border-color: #ef4f59;
+  border-color: #e11d48;
 }
 
 .selected-program-locked {
@@ -6958,12 +6958,12 @@ body {
 }
 
 .program-type-grid button:hover:not(:disabled) {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 8px 24px rgba(239, 79, 89, 0.08);
 }
 
 .program-type-grid button.selected {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   background: #fff6f7;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.1);
 }
@@ -6979,7 +6979,7 @@ body {
   place-items: center;
   border-radius: 12px;
   background: #fff0f2;
-  color: #ef4f59;
+  color: #e11d48;
 }
 
 .program-type-grid strong {
@@ -7064,7 +7064,7 @@ body {
 
 .settings-fields select:focus,
 .reward-fields select:focus {
-  border-color: #ef4f59;
+  border-color: #e11d48;
   box-shadow: 0 0 0 3px rgba(239, 79, 89, 0.12);
 }
 

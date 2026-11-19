@@ -5,7 +5,8 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Eye, EyeOff, X } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 import { AuthShell } from "@/components/auth-shell";
 
 export default function LoginPage() {
@@ -15,29 +16,19 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [registered, setRegistered] = useState(false);
   useEffect(() => {
     const saved = sessionStorage.getItem("fidara_registered_email");
-    if (saved)
-      queueMicrotask(() => {
-        setEmail(saved);
-        setRegistered(true);
-        sessionStorage.removeItem("fidara_registered_email");
+    if (!saved) return;
+
+    queueMicrotask(() => {
+      setEmail(saved);
+      sessionStorage.removeItem("fidara_registered_email");
+      toast.success("Tu cuenta está lista", {
+        description:
+          "Tu negocio fue registrado correctamente. Inicia sesión para configurar tu programa.",
       });
+    });
   }, []);
-  useEffect(() => {
-    if (!registered) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setRegistered(false);
-    }, 4500);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [registered]);
   async function submit(event: FormEvent) {
     event.preventDefault();
 
@@ -167,37 +158,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {registered && (
-        <div
-          className="fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-[390px] items-start gap-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-[0_20px_60px_rgba(0,0,0,0.16)] sm:right-6 sm:top-6"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-            <CheckCircle2 size={20} />
-          </span>
-
-          <div className="min-w-0 flex-1">
-            <strong className="block text-sm font-extrabold text-black">
-              Tu cuenta está lista
-            </strong>
-
-            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-              Tu negocio fue registrado correctamente. Inicia sesión para
-              configurar tu programa.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setRegistered(false)}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-black"
-            aria-label="Cerrar notificación"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </AuthShell>
   );
 }

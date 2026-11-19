@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { toast } from "sonner";
 import { SubscriptionPlanSection } from "@/components/subscription-plan-section";
 
 type Profile = {
@@ -53,12 +54,6 @@ type PasswordForm = {
   newPassword: string;
   confirmPassword: string;
 };
-
-type ToastMessage = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-} | null;
 
 type ConfirmationType = "profile" | "password" | null;
 
@@ -104,7 +99,6 @@ function getInitials(value: string) {
     .map((word) => word.charAt(0).toUpperCase())
     .join("");
 }
-
 function getRoleName(role: string) {
   switch (role) {
     case "Owner":
@@ -153,20 +147,12 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationType>(null);
-  const [toast, setToast] = useState<ToastMessage>(null);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
   useEffect(() => {
     void loadProfile();
   }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timeout = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
 
   useEffect(() => {
     if (!confirmation) return;
@@ -224,10 +210,8 @@ export default function ProfilePage() {
     event.preventDefault();
 
     if (!profileForm.firstName.trim()) {
-      setToast({
-        type: "error",
-        title: "Revisa el formulario",
-        message: "El nombre es obligatorio.",
+      toast.error("Revisa el formulario", {
+        description: "El nombre es obligatorio.",
       });
       return;
     }
@@ -275,17 +259,13 @@ export default function ProfilePage() {
       }));
       updateStoredSession(updatedProfile);
       setConfirmation(null);
-      setToast({
-        type: "success",
-        title: "Cambios guardados",
-        message: "Tu perfil y preferencias se actualizaron correctamente.",
+      toast.success("Cambios guardados", {
+        description: "Tu perfil y preferencias se actualizaron correctamente.",
       });
     } catch (caught) {
       setConfirmation(null);
-      setToast({
-        type: "error",
-        title: "No pudimos guardar los cambios",
-        message:
+      toast.error("No pudimos guardar los cambios", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -299,19 +279,15 @@ export default function ProfilePage() {
     event.preventDefault();
 
     if (passwordForm.newPassword.length < 8) {
-      setToast({
-        type: "error",
-        title: "Contraseña demasiado corta",
-        message: "La nueva contraseña debe tener al menos 8 caracteres.",
+      toast.error("Contraseña demasiado corta", {
+        description: "La nueva contraseña debe tener al menos 8 caracteres.",
       });
       return;
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setToast({
-        type: "error",
-        title: "Las contraseñas no coinciden",
-        message: "Revisa la confirmación de la nueva contraseña.",
+      toast.error("Las contraseñas no coinciden", {
+        description: "Revisa la confirmación de la nueva contraseña.",
       });
       return;
     }
@@ -346,17 +322,13 @@ export default function ProfilePage() {
 
       setPasswordForm(EMPTY_PASSWORD_FORM);
       setConfirmation(null);
-      setToast({
-        type: "success",
-        title: "Contraseña actualizada",
-        message: "Tu nueva contraseña ya está activa.",
+      toast.success("Contraseña actualizada", {
+        description: "Tu nueva contraseña ya está activa.",
       });
     } catch (caught) {
       setConfirmation(null);
-      setToast({
-        type: "error",
-        title: "No pudimos cambiar la contraseña",
-        message:
+      toast.error("No pudimos cambiar la contraseña", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -687,7 +659,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {toast && <ProfileToast toast={toast} onClose={() => setToast(null)} />}
     </main>
   );
 }
@@ -871,49 +842,6 @@ function ConfirmationDialog({
           </button>
         </div>
       </section>
-    </div>
-  );
-}
-
-type ProfileToastProps = {
-  toast: Exclude<ToastMessage, null>;
-  onClose: () => void;
-};
-
-function ProfileToast({ toast, onClose }: ProfileToastProps) {
-  const success = toast.type === "success";
-
-  return (
-    <div
-      className={`fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_20px_60px_rgba(17,24,39,0.18)] ${
-        success ? "border-emerald-200" : "border-rose-200"
-      }`}
-      role="status"
-      aria-live="polite"
-    >
-      <span
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-          success
-            ? "bg-emerald-50 text-emerald-700"
-            : "bg-rose-50 text-[#E11D48]"
-        }`}
-      >
-        {success ? <CheckCircle2 size={19} /> : <AlertTriangle size={19} />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <strong className="block text-sm font-extrabold text-[#111827]">
-          {toast.title}
-        </strong>
-        <p className="mt-1 text-xs leading-5 text-[#6B7280]">{toast.message}</p>
-      </div>
-      <button
-        type="button"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
-        onClick={onClose}
-        aria-label="Cerrar notificación"
-      >
-        <X size={16} />
-      </button>
     </div>
   );
 }

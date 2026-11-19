@@ -5,7 +5,6 @@ import {
   Building2,
   ChevronDown,
   Check,
-  CheckCircle2,
   Clock3,
   LoaderCircle,
   MapPin,
@@ -25,6 +24,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 import styles from "./team.module.css";
 
@@ -66,12 +66,6 @@ type TeamForm = {
 type StatusConfirmation = {
   member: TeamMember;
   nextStatus: boolean;
-} | null;
-
-type ToastMessage = {
-  type: "success" | "error";
-  title: string;
-  message: string;
 } | null;
 
 const emptyForm: TeamForm = {
@@ -133,8 +127,6 @@ export default function TeamPage() {
   const [form, setForm] = useState<TeamForm>(emptyForm);
   const [statusConfirmation, setStatusConfirmation] =
     useState<StatusConfirmation>(null);
-  const [toast, setToast] = useState<ToastMessage>(null);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -185,13 +177,6 @@ export default function TeamPage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (!toast) return;
-
-    const timeout = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
-
-  useEffect(() => {
     if (!formOpen && !statusConfirmation) return;
 
     const previousOverflow = document.body.style.overflow;
@@ -238,7 +223,6 @@ export default function TeamPage() {
       locationIds: locations.length === 1 ? [locations[0].id] : [],
     });
     setError("");
-    setToast(null);
     setFormOpen(true);
   }
 
@@ -254,7 +238,6 @@ export default function TeamPage() {
       locationIds: member.locations.map((location) => location.id),
     });
     setError("");
-    setToast(null);
     setFormOpen(true);
   }
 
@@ -303,8 +286,6 @@ export default function TeamPage() {
 
     setSaving(true);
     setError("");
-    setToast(null);
-
     try {
       const response = await fetch(
         editing ? `/api/team/${editing.organizationUserId}` : "/api/team",
@@ -350,10 +331,8 @@ export default function TeamPage() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm);
-      setToast({
-        type: "success",
-        title: wasEditing ? "Cambios guardados" : "Integrante agregado",
-        message:
+      toast.success(wasEditing ? "Cambios guardados" : "Integrante agregado", {
+        description:
           payload.message ??
           (wasEditing
             ? `${memberName} fue actualizado correctamente.`
@@ -409,18 +388,14 @@ export default function TeamPage() {
         ),
       );
 
-      setToast({
-        type: "success",
-        title: nextStatus ? "Acceso reactivado" : "Acceso desactivado",
-        message: nextStatus
+      toast.success(nextStatus ? "Acceso reactivado" : "Acceso desactivado", {
+        description: nextStatus
           ? `${member.fullName} ya puede volver a operar Fidara.`
           : `${member.fullName} ya no tiene acceso al panel.`,
       });
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No pudimos completar la operación",
-        message:
+      toast.error("No pudimos completar la operación", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -999,34 +974,6 @@ export default function TeamPage() {
         </div>
       )}
 
-      {toast && (
-        <div
-          className={`${styles.toast} ${
-            toast.type === "success" ? styles.toastSuccess : styles.toastError
-          }`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className={styles.toastIcon}>
-            {toast.type === "success" ? (
-              <CheckCircle2 size={19} />
-            ) : (
-              <AlertTriangle size={19} />
-            )}
-          </span>
-          <div>
-            <strong>{toast.title}</strong>
-            <p>{toast.message}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="Cerrar notificación"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </main>
   );
 }

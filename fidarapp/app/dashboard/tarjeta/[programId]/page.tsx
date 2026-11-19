@@ -32,6 +32,7 @@ import { Copy, ExternalLink, FileDown } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { WalletCardPreview } from "@/components/dashboard/wallet-card-preview";
+import { toast } from "sonner";
 
 type RewardInformation = {
   id: string;
@@ -288,8 +289,6 @@ export default function CardEditorPage() {
 
   const [error, setError] = useState("");
 
-  const [success, setSuccess] = useState("");
-
   const isStampProgram = form.programType === 1;
   const isPointsProgram = form.programType === 2;
   const isCashbackProgram = form.programType === 3;
@@ -457,7 +456,6 @@ export default function CardEditorPage() {
       [field]: value,
     }));
 
-    setSuccess("");
   }
 
   function selectProgramType(programType: 1 | 2 | 3 | 4) {
@@ -521,7 +519,6 @@ export default function CardEditorPage() {
     setProgramTypeSelected(true);
     setShowTypeSelector(false);
     setError("");
-    setSuccess("");
   }
 
   function selectImage(
@@ -568,7 +565,6 @@ export default function CardEditorPage() {
     });
 
     setError("");
-    setSuccess("");
   }
 
   async function selectStripImage(event: ChangeEvent<HTMLInputElement>) {
@@ -636,7 +632,6 @@ export default function CardEditorPage() {
 
       updateField("stripDesignMode", "image");
       setError("");
-      setSuccess("");
     } catch (caught) {
       URL.revokeObjectURL(objectUrl);
       setError(
@@ -876,7 +871,6 @@ export default function CardEditorPage() {
 
     setSaving(true);
     setError("");
-    setSuccess("");
 
     try {
       const formData = new FormData();
@@ -1093,13 +1087,16 @@ export default function CardEditorPage() {
         stripImage: null,
       });
 
-      setSuccess(payload.message ?? "Programa actualizado correctamente.");
+      toast.success("Programa actualizado", {
+        description: payload.message ?? "La tarjeta se guardó correctamente.",
+      });
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "No fue posible guardar el programa.",
-      );
+      toast.error("No se pudo guardar el programa", {
+        description:
+          caught instanceof Error
+            ? caught.message
+            : "No fue posible guardar el programa.",
+      });
     } finally {
       setSaving(false);
     }
@@ -1338,13 +1335,6 @@ export default function CardEditorPage() {
       </section>
 
       {error && <div className="card-editor-alert error-box">{error}</div>}
-
-      {success && (
-        <div className="card-editor-alert success-box">
-          <Check size={18} />
-          {success}
-        </div>
-      )}
 
       <div className="card-editor-layout">
         <form

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import {
   AlertTriangle,
   Building2,
-  CheckCircle2,
   LoaderCircle,
   MapPin,
   Pencil,
@@ -20,6 +19,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { toast } from "sonner";
 import styles from "./locations.module.css";
 
 const GooglePlacePicker = dynamic(
@@ -61,12 +61,6 @@ type StatusFilter = "all" | "active" | "inactive";
 type StatusConfirmation = {
   location: Location;
   nextStatus: boolean;
-} | null;
-
-type ToastMessage = {
-  type: "success" | "error";
-  title: string;
-  message: string;
 } | null;
 
 const emptyForm: LocationForm = {
@@ -128,8 +122,6 @@ export default function LocationsPage() {
   const [form, setForm] = useState<LocationForm>(emptyForm);
   const [statusConfirmation, setStatusConfirmation] =
     useState<StatusConfirmation>(null);
-  const [toast, setToast] = useState<ToastMessage>(null);
-
   const loadLocations = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -166,16 +158,6 @@ export default function LocationsPage() {
   useEffect(() => {
     void loadLocations();
   }, [loadLocations]);
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timeout = window.setTimeout(() => {
-      setToast(null);
-    }, 3200);
-
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
 
   useEffect(() => {
     if (!formOpen && !statusConfirmation) return;
@@ -320,10 +302,8 @@ export default function LocationsPage() {
       setForm(emptyForm);
       await loadLocations();
 
-      setToast({
-        type: "success",
-        title: wasEditing ? "Cambios guardados" : "Sucursal creada",
-        message: wasEditing
+      toast.success(wasEditing ? "Cambios guardados" : "Sucursal creada", {
+        description: wasEditing
           ? `${name} se actualizó correctamente.`
           : `${name} ya está disponible para tu equipo.`,
       });
@@ -377,18 +357,14 @@ export default function LocationsPage() {
         ),
       );
 
-      setToast({
-        type: "success",
-        title: nextStatus ? "Sucursal reactivada" : "Sucursal archivada",
-        message: nextStatus
+      toast.success(nextStatus ? "Sucursal reactivada" : "Sucursal archivada", {
+        description: nextStatus
           ? `${location.name} vuelve a estar disponible.`
           : `Se conservó el historial de ${location.name}.`,
       });
     } catch (caught) {
-      setToast({
-        type: "error",
-        title: "No pudimos completar la operación",
-        message:
+      toast.error("No pudimos completar la operación", {
+        description:
           caught instanceof Error
             ? caught.message
             : "Ocurrió un error inesperado.",
@@ -759,46 +735,6 @@ export default function LocationsPage() {
         </div>
       )}
 
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_20px_60px_rgba(17,24,39,0.18)] ${
-            toast.type === "success" ? "border-emerald-200" : "border-rose-200"
-          }`}
-          role="status"
-        >
-          <span
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-              toast.type === "success"
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-rose-50 text-[#E11D48]"
-            }`}
-          >
-            {toast.type === "success" ? (
-              <CheckCircle2 size={19} />
-            ) : (
-              <AlertTriangle size={19} />
-            )}
-          </span>
-
-          <div className="min-w-0 flex-1">
-            <strong className="block text-sm font-extrabold text-[#111827]">
-              {toast.title}
-            </strong>
-            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-              {toast.message}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
-            onClick={() => setToast(null)}
-            aria-label="Cerrar notificación"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
     </main>
   );
 }
