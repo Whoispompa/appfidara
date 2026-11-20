@@ -19,6 +19,7 @@ Referencia compacta de la estructura real del frontend Next.js (App Router). Las
 | `/dashboard/clientes/[customerId]` | Detalle y tarjetas de un cliente | `app/dashboard/clientes/[customerId]/page.tsx` |
 | `/dashboard/tarjeta` | Listado y eliminación de programas | `app/dashboard/tarjeta/page.tsx` |
 | `/dashboard/tarjeta/[programId]` | Alta (`programId = new`) y edición de programa/tarjeta | `app/dashboard/tarjeta/[programId]/page.tsx` |
+| `/dashboard/gift-cards` | Estadísticas, venta, consulta, enlaces e historial y recordatorios de Gift Cards | `app/dashboard/gift-cards/page.tsx` |
 | `/dashboard/equipo` | Integrantes, roles y sucursales asignadas | `app/dashboard/equipo/page.tsx` |
 | `/dashboard/ubicaciones` | CRUD y estado de sucursales | `app/dashboard/ubicaciones/page.tsx` |
 | `/dashboard/estadisticas` | Métricas por periodo, programa, empleado y sucursal | `app/dashboard/estadisticas/page.tsx` |
@@ -64,6 +65,9 @@ No existe un directorio `services/`: las llamadas cliente están colocadas en p�
 | `api/wallet/cards/lookup` | `POST` | Búsqueda/escaneo de tarjeta |
 | `api/wallet/cards/{earn,stamps,cashback-sale,redeem,redeem-cashback}` | `POST` | Acumulación y canjes Wallet |
 | `api/wallet/cards/coupons/redeem` | `POST` | Canje de cupón |
+| `api/gift-cards/{sales,lookup,redeem}` | `POST` | Venta y consulta/canje de Gift Cards |
+| `api/gift-cards/[giftCardId]/{confirm-payment,movements,share}` | `POST`, `GET` | Confirmación de pago, historial y recuperación de enlaces |
+| `api/gift-cards/{statistics,expiration-reminders}` | `GET` | Métricas separadas y recordatorios manuales |
 | `api/auth/wallet/cards/{lookup,stamps}` | `POST` | Proxies autenticados alternos existentes |
 
 Conexiones adicionales:
@@ -92,6 +96,7 @@ No existe una carpeta global de tipos. Los contratos están colocados junto a ca
 - Wallet/programas: contratos de tarjeta, recompensas, formulario e imágenes en `app/dashboard/escanear/page.tsx` y `app/dashboard/tarjeta/**/page.tsx`.
 - Clientes, ubicaciones, equipo, perfil, branding y notificaciones: tipos locales en sus respectivos `page.tsx`.
 - Contratos compartidos exportados: `DateTimePreferences` en `components/lib/date-time.ts` y `GooglePlaceSelection` en `components/locations/google-place-picker.tsx`.
+- Gift Cards: contratos locales de configuración en el editor de programas, venta/reportes en `app/dashboard/gift-cards/page.tsx` y canje en `app/dashboard/escanear/page.tsx`; el proxy autenticado compartido está en `lib/gift-card-bff.ts`.
 - Los route handlers dinámicos declaran `RouteContext` localmente. Las respuestas cliente suelen envolverse en tipos locales `ApiResponse<T>` o `ApiEnvelope<T>`.
 
 Antes de cambiar un contrato, verificar el tipo local y el handler `/api/*` correspondiente; no hay un cliente API ni esquemas generados centralizados.
@@ -113,3 +118,5 @@ Antes de cambiar un contrato, verificar el tipo local y el handler `/api/*` corr
 ## Ruta rápida por funcionalidad
 
 Para una tarea, empezar por `app/**/page.tsx`, seguir sus `fetch("/api/...")` al handler homónimo y revisar sólo los componentes/tipos importados. Para navegación/layout usar `components/dashboard/`; para operaciones Wallet, `app/dashboard/escanear/page.tsx` + `app/api/wallet/cards/`; para programas, `app/dashboard/tarjeta/` + `app/api/programs/`.
+
+Gift Cards no dispone de un endpoint administrativo paginado para listar todas las tarjetas. La interfaz utiliza exclusivamente consulta por QR, recuperación por ID conocido, estadísticas y recordatorios; no debe agregarse un listado basado en datos ficticios.

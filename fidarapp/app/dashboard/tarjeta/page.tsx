@@ -199,6 +199,8 @@ export default function ProgramsPage() {
   }
 
   useEffect(() => {
+    // Carga inicial desde el BFF autenticado.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPrograms();
   }, [loadPrograms]);
 
@@ -303,7 +305,7 @@ export default function ProgramsPage() {
                       program.cardStripColor ?? program.cardBackgroundColor
                     }
                     targetValue={target}
-                    balance={4}
+                    balance={program.programType === 5 ? 500 : 4}
                     rewardsAvailable={0}
                     showPoweredByFidara={program.showPoweredByFidara}
                     compact
@@ -317,7 +319,9 @@ export default function ProgramsPage() {
                   <h2>{program.name}</h2>
 
                   <p>
-                    {program.programType === 4
+                    {program.programType === 5
+                      ? "Tarjeta de regalo con saldo digital"
+                      : program.programType === 4
                       ? program.couponBenefitType === 1
                         ? `${program.couponBenefitValue ?? 0}% de descuento`
                         : program.couponBenefitType === 2

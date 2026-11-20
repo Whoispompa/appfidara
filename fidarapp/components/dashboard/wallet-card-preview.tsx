@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Coins } from "lucide-react";
+import { Banknote, Coins, Gift } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 type WalletCardPreviewProps = {
@@ -110,6 +110,7 @@ export function WalletCardPreview({
   const isPointsProgram = programType === 2;
   const isCashbackProgram = programType === 3;
   const isCouponProgram = programType === 4;
+  const isGiftCardProgram = programType === 5;
 
   const numericBalance = Math.max(0, Number(balance) || 0);
 
@@ -302,6 +303,24 @@ export function WalletCardPreview({
         </div>
       )}
 
+      {isGiftCardProgram && (
+        <div
+          className="wallet-points-preview wallet-cashback-preview"
+          style={centralAreaStyle}
+        >
+          <span className="wallet-points-icon" aria-hidden="true">
+            <Gift size={compact ? 20 : 28} />
+          </span>
+          <div className="wallet-points-copy">
+            <small style={{ color: labelColor || "#f5f1e8" }}>
+              SALDO DISPONIBLE
+            </small>
+            <strong>${moneyFormatter.format(numericBalance)} {currency}</strong>
+            <span>Un regalo para disfrutar</span>
+          </div>
+        </div>
+      )}
+
       {isStampProgram && (
         <div className="wallet-stamps-preview" style={centralAreaStyle}>
           {Array.from({ length: visibleStamps }).map((_, index) => {
@@ -331,6 +350,8 @@ export function WalletCardPreview({
             <small style={{ color: labelColor || "#f5f1e8" }}>
               {isCashbackProgram
                 ? "MÍNIMO PARA USAR"
+                : isGiftCardProgram
+                  ? "IMPORTE ORIGINAL"
                 : isPointsProgram
                   ? "META DE PUNTOS"
                   : "TU PROGRESO"}
@@ -339,6 +360,8 @@ export function WalletCardPreview({
             <strong>
               {isCashbackProgram
                 ? `$${moneyFormatter.format(minimumRedemption)} ${currency}`
+                : isGiftCardProgram
+                  ? `$${moneyFormatter.format(numericBalance)} ${currency}`
                 : isPointsProgram
                   ? `${target.toLocaleString("es-MX")} puntos`
                   : `${progressBalance} de ${target}`}
@@ -349,6 +372,8 @@ export function WalletCardPreview({
             <small style={{ color: labelColor || "#f5f1e8" }}>
               {isCashbackProgram
                 ? "DISPONIBLE PARA USAR"
+                : isGiftCardProgram
+                  ? "ESTADO"
                 : "RECOMPENSAS DISPONIBLES"}
             </small>
 
@@ -357,6 +382,8 @@ export function WalletCardPreview({
                 ? cashbackAvailable
                   ? `$${moneyFormatter.format(numericBalance)} ${currency}`
                   : "Aún no"
+                : isGiftCardProgram
+                  ? "Activa"
                 : `${rewardsAvailable} ${
                     rewardsAvailable === 1 ? "recompensa" : "recompensas"
                   }`}

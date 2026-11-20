@@ -10,6 +10,8 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import {
   BadgePercent,
+  ArrowDown,
+  ArrowUp,
   Banknote,
   Check,
   Coins,
@@ -19,9 +21,11 @@ import {
   ImageIcon,
   LoaderCircle,
   Palette,
+  Plus,
   Save,
   Stamp,
   Ticket,
+  Trash2,
   Upload,
   Users,
   X,
@@ -69,6 +73,12 @@ type ProgramInformation = {
   couponFixedExpirationAt?: string | null;
   couponUsageLimit?: number | null;
   couponTerms?: string | null;
+  giftCardAllowCustomAmount?: boolean;
+  giftCardCustomMinAmount?: number | null;
+  giftCardCustomMaxAmount?: number | null;
+  giftCardExpirationEnabled?: boolean;
+  giftCardValidityDays?: number | null;
+  giftCardPresetAmounts?: GiftCardPreset[];
   isRecurring: boolean;
   cardLogoUrl?: string | null;
   activeStampImageUrl?: string | null;
@@ -80,6 +90,12 @@ type ProgramInformation = {
   cardStripColor?: string | null;
   showPoweredByFidara: boolean;
   reward?: RewardInformation | null;
+};
+
+type GiftCardPreset = {
+  amount: number;
+  isActive: boolean;
+  displayOrder: number;
 };
 
 type ProgramForm = {
@@ -105,6 +121,12 @@ type ProgramForm = {
   couponFixedExpirationAt: string;
   couponUsageLimit: string;
   couponTerms: string;
+  giftCardAllowCustomAmount: boolean;
+  giftCardCustomMinAmount: string;
+  giftCardCustomMaxAmount: string;
+  giftCardExpirationEnabled: boolean;
+  giftCardValidityDays: string;
+  giftCardPresetAmounts: GiftCardPreset[];
   isRecurring: boolean;
   cardBackgroundColor: string;
   cardForegroundColor: string;
@@ -182,6 +204,16 @@ const initialForm: ProgramForm = {
   couponFixedExpirationAt: "",
   couponUsageLimit: "1",
   couponTerms: "",
+  giftCardAllowCustomAmount: true,
+  giftCardCustomMinAmount: "100",
+  giftCardCustomMaxAmount: "2000",
+  giftCardExpirationEnabled: false,
+  giftCardValidityDays: "365",
+  giftCardPresetAmounts: [200, 500, 1000].map((amount, displayOrder) => ({
+    amount,
+    isActive: true,
+    displayOrder,
+  })),
   isRecurring: true,
   cardBackgroundColor: "#1b6726",
   cardForegroundColor: "#ffffff",
@@ -222,6 +254,16 @@ const emptyProgram: ProgramInformation = {
   couponFixedExpirationAt: null,
   couponUsageLimit: 1,
   couponTerms: null,
+  giftCardAllowCustomAmount: true,
+  giftCardCustomMinAmount: 100,
+  giftCardCustomMaxAmount: 2000,
+  giftCardExpirationEnabled: false,
+  giftCardValidityDays: null,
+  giftCardPresetAmounts: [200, 500, 1000].map((amount, displayOrder) => ({
+    amount,
+    isActive: true,
+    displayOrder,
+  })),
   isRecurring: true,
   cardLogoUrl: null,
   activeStampImageUrl: null,
@@ -293,6 +335,7 @@ export default function CardEditorPage() {
   const isPointsProgram = form.programType === 2;
   const isCashbackProgram = form.programType === 3;
   const isCouponProgram = form.programType === 4;
+  const isGiftCardProgram = form.programType === 5;
 
   const usesTraditionalReward = isStampProgram || isPointsProgram;
 
@@ -400,6 +443,27 @@ export default function CardEditorPage() {
 
         couponTerms: data.couponTerms ?? "",
 
+        giftCardAllowCustomAmount: data.giftCardAllowCustomAmount ?? true,
+
+        giftCardCustomMinAmount: String(data.giftCardCustomMinAmount ?? 100),
+
+        giftCardCustomMaxAmount: String(data.giftCardCustomMaxAmount ?? 2000),
+
+        giftCardExpirationEnabled: data.giftCardExpirationEnabled ?? false,
+
+        giftCardValidityDays: String(data.giftCardValidityDays ?? 365),
+
+        giftCardPresetAmounts:
+          data.giftCardPresetAmounts?.length
+            ? [...data.giftCardPresetAmounts].sort(
+                (left, right) => left.displayOrder - right.displayOrder,
+              )
+            : [200, 500, 1000].map((amount, displayOrder) => ({
+                amount,
+                isActive: true,
+                displayOrder,
+              })),
+
         isRecurring: data.isRecurring,
 
         cardBackgroundColor: data.cardBackgroundColor ?? "#1b6726",
@@ -444,6 +508,8 @@ export default function CardEditorPage() {
   }, [isNewProgram, programId, router]);
 
   useEffect(() => {
+    // Carga inicial desde el BFF al montar/cambiar el programa.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadProgram();
   }, [loadProgram]);
 
@@ -458,7 +524,7 @@ export default function CardEditorPage() {
 
   }
 
-  function selectProgramType(programType: 1 | 2 | 3 | 4) {
+  function selectProgramType(programType: 1 | 2 | 3 | 4 | 5) {
     setForm((current) => ({
       ...current,
 
@@ -514,11 +580,44 @@ export default function CardEditorPage() {
         programType === 4 ? current.couponUsageLimit || "1" : "1",
 
       couponTerms: programType === 4 ? current.couponTerms : "",
+
+      isRecurring: programType === 5 ? false : current.isRecurring,
     }));
 
     setProgramTypeSelected(true);
     setShowTypeSelector(false);
     setError("");
+  }
+
+  function updateGiftCardPreset(
+    index: number,
+    changes: Partial<GiftCardPreset>,
+  ) {
+    setForm((current) => ({
+      ...current,
+      giftCardPresetAmounts: current.giftCardPresetAmounts.map(
+        (preset, presetIndex) =>
+          presetIndex === index ? { ...preset, ...changes } : preset,
+      ),
+    }));
+  }
+
+  function moveGiftCardPreset(index: number, direction: -1 | 1) {
+    setForm((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.giftCardPresetAmounts.length) {
+        return current;
+      }
+      const presets = [...current.giftCardPresetAmounts];
+      [presets[index], presets[target]] = [presets[target], presets[index]];
+      return {
+        ...current,
+        giftCardPresetAmounts: presets.map((preset, displayOrder) => ({
+          ...preset,
+          displayOrder,
+        })),
+      };
+    });
   }
 
   function selectImage(
@@ -690,6 +789,12 @@ export default function CardEditorPage() {
 
     const couponUsageLimit = Number(form.couponUsageLimit);
 
+    const giftCardCustomMinAmount = Number(form.giftCardCustomMinAmount);
+
+    const giftCardCustomMaxAmount = Number(form.giftCardCustomMaxAmount);
+
+    const giftCardValidityDays = Number(form.giftCardValidityDays);
+
     const rewardValue = Number(form.rewardValue || "0");
 
     if (!form.name.trim()) {
@@ -846,6 +951,53 @@ export default function CardEditorPage() {
       }
     }
 
+    if (isGiftCardProgram) {
+      const presetAmounts = form.giftCardPresetAmounts.map(({ amount }) => amount);
+      const hasInvalidPreset = presetAmounts.some(
+        (amount) =>
+          !Number.isFinite(amount) ||
+          amount <= 0 ||
+          Math.round(amount * 100) !== amount * 100,
+      );
+      const hasDuplicates = new Set(presetAmounts).size !== presetAmounts.length;
+
+      if (hasInvalidPreset) {
+        setError("Cada monto preestablecido debe ser positivo y tener máximo dos decimales.");
+        return;
+      }
+
+      if (hasDuplicates) {
+        setError("Los montos preestablecidos no pueden repetirse.");
+        return;
+      }
+
+      if (!form.giftCardAllowCustomAmount && !form.giftCardPresetAmounts.some((preset) => preset.isActive)) {
+        setError("Activa al menos un monto o permite importes personalizados.");
+        return;
+      }
+
+      if (
+        form.giftCardAllowCustomAmount &&
+        (!Number.isFinite(giftCardCustomMinAmount) ||
+          !Number.isFinite(giftCardCustomMaxAmount) ||
+          giftCardCustomMinAmount <= 0 ||
+          giftCardCustomMaxAmount < giftCardCustomMinAmount ||
+          Math.round(giftCardCustomMinAmount * 100) !== giftCardCustomMinAmount * 100 ||
+          Math.round(giftCardCustomMaxAmount * 100) !== giftCardCustomMaxAmount * 100)
+      ) {
+        setError("Configura un rango personalizado válido con máximo dos decimales.");
+        return;
+      }
+
+      if (
+        form.giftCardExpirationEnabled &&
+        (!Number.isInteger(giftCardValidityDays) || giftCardValidityDays < 1)
+      ) {
+        setError("La vigencia debe ser de al menos un día.");
+        return;
+      }
+    }
+
     if (
       usesTraditionalReward &&
       form.rewardType === 3 &&
@@ -976,6 +1128,47 @@ export default function CardEditorPage() {
 
         formData.append("CouponUsageLimit", String(couponUsageLimit));
         formData.append("CouponTerms", form.couponTerms.trim());
+      }
+
+      if (isGiftCardProgram) {
+        formData.append(
+          "GiftCardAllowCustomAmount",
+          String(form.giftCardAllowCustomAmount),
+        );
+        formData.append(
+          "GiftCardExpirationEnabled",
+          String(form.giftCardExpirationEnabled),
+        );
+
+        if (form.giftCardAllowCustomAmount) {
+          formData.append(
+            "GiftCardCustomMinAmount",
+            String(giftCardCustomMinAmount),
+          );
+          formData.append(
+            "GiftCardCustomMaxAmount",
+            String(giftCardCustomMaxAmount),
+          );
+        }
+
+        if (form.giftCardExpirationEnabled) {
+          formData.append("GiftCardValidityDays", String(giftCardValidityDays));
+        }
+
+        form.giftCardPresetAmounts.forEach((preset, index) => {
+          formData.append(
+            `GiftCardPresetAmounts[${index}].Amount`,
+            String(preset.amount),
+          );
+          formData.append(
+            `GiftCardPresetAmounts[${index}].IsActive`,
+            String(preset.isActive),
+          );
+          formData.append(
+            `GiftCardPresetAmounts[${index}].DisplayOrder`,
+            String(index),
+          );
+        });
       }
 
       // La parte central se comparte entre todos los programas.
@@ -1279,8 +1472,8 @@ export default function CardEditorPage() {
 
               <button
                 type="button"
-                className="card-type-option upcoming"
-                disabled
+                className="card-type-option available"
+                onClick={() => selectProgramType(5)}
               >
                 <span className="card-type-icon">
                   <CreditCard size={25} />
@@ -1289,7 +1482,7 @@ export default function CardEditorPage() {
                   <strong>Tarjeta de regalo</strong>
                   <small>Saldo digital para regalar y utilizar después.</small>
                 </span>
-                <span className="card-type-status">Próximamente</span>
+                <span className="card-type-status available">Disponible</span>
               </button>
             </div>
 
@@ -1362,6 +1555,8 @@ export default function CardEditorPage() {
                   <Coins size={22} />
                 ) : isCashbackProgram ? (
                   <Banknote size={22} />
+                ) : isGiftCardProgram ? (
+                  <CreditCard size={22} />
                 ) : (
                   <Ticket size={22} />
                 )}
@@ -1376,7 +1571,9 @@ export default function CardEditorPage() {
                       ? "Programa de puntos"
                       : isCashbackProgram
                         ? "Programa de cashback"
-                        : "Programa de cupones"}
+                        : isGiftCardProgram
+                          ? "Programa Gift Card"
+                          : "Programa de cupones"}
                 </strong>
               </span>
 
@@ -1488,6 +1685,122 @@ export default function CardEditorPage() {
               </label>
             </div>
           </section>
+
+          {isGiftCardProgram && (
+            <section className="settings-card">
+              <div className="settings-card-heading">
+                <span><CreditCard size={19} /></span>
+                <div>
+                  <h2>Montos y vigencia</h2>
+                  <p>Configura las opciones disponibles al registrar una venta.</p>
+                </div>
+              </div>
+
+              <div className="settings-fields">
+                <div className="full-field gift-card-presets">
+                  <div className="gift-card-presets-heading">
+                    <div>
+                      <strong>Montos preestablecidos</strong>
+                      <small>Activa, ordena o elimina las opciones de venta.</small>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const largest = Math.max(
+                          0,
+                          ...form.giftCardPresetAmounts.map((preset) => preset.amount),
+                        );
+                        updateField("giftCardPresetAmounts", [
+                          ...form.giftCardPresetAmounts,
+                          {
+                            amount: largest + 100,
+                            isActive: true,
+                            displayOrder: form.giftCardPresetAmounts.length,
+                          },
+                        ]);
+                      }}
+                    >
+                      <Plus size={16} /> Agregar monto
+                    </button>
+                  </div>
+
+                  {form.giftCardPresetAmounts.length === 0 ? (
+                    <p className="field-help">No hay montos preestablecidos.</p>
+                  ) : (
+                    form.giftCardPresetAmounts.map((preset, index) => (
+                      <div className="gift-card-preset-row" key={index}>
+                        <label>
+                          <span>Monto {index + 1}</span>
+                          <div className="money-field">
+                            <b>$</b>
+                            <input
+                              type="number"
+                              min={0.01}
+                              step={0.01}
+                              value={preset.amount}
+                              onChange={(event) =>
+                                updateGiftCardPreset(index, {
+                                  amount: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <small>MXN</small>
+                          </div>
+                        </label>
+                        <label className="gift-card-preset-active">
+                          <input
+                            type="checkbox"
+                            checked={preset.isActive}
+                            onChange={(event) =>
+                              updateGiftCardPreset(index, {
+                                isActive: event.target.checked,
+                              })
+                            }
+                          />
+                          Activo
+                        </label>
+                        <div className="gift-card-preset-actions">
+                          <button type="button" aria-label="Subir monto" disabled={index === 0} onClick={() => moveGiftCardPreset(index, -1)}><ArrowUp size={16} /></button>
+                          <button type="button" aria-label="Bajar monto" disabled={index === form.giftCardPresetAmounts.length - 1} onClick={() => moveGiftCardPreset(index, 1)}><ArrowDown size={16} /></button>
+                          <button
+                            type="button"
+                            aria-label="Eliminar monto"
+                            onClick={() =>
+                              updateField(
+                                "giftCardPresetAmounts",
+                                form.giftCardPresetAmounts
+                                  .filter((_, presetIndex) => presetIndex !== index)
+                                  .map((item, displayOrder) => ({ ...item, displayOrder })),
+                              )
+                            }
+                          ><Trash2 size={16} /></button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <label className="settings-toggle full-field">
+                  <input type="checkbox" checked={form.giftCardAllowCustomAmount} onChange={(event) => updateField("giftCardAllowCustomAmount", event.target.checked)} />
+                  <span className="toggle-control" />
+                  <span><strong>Permitir monto personalizado</strong><br /><small>El empleado podrá capturar un importe dentro del rango.</small></span>
+                </label>
+
+                {form.giftCardAllowCustomAmount && <>
+                  <label><span>Importe mínimo</span><div className="money-field"><b>$</b><input type="number" min={0.01} step={0.01} value={form.giftCardCustomMinAmount} onChange={(event) => updateField("giftCardCustomMinAmount", normalizeNumericInput(event.target.value))} /><small>MXN</small></div></label>
+                  <label><span>Importe máximo</span><div className="money-field"><b>$</b><input type="number" min={0.01} step={0.01} value={form.giftCardCustomMaxAmount} onChange={(event) => updateField("giftCardCustomMaxAmount", normalizeNumericInput(event.target.value))} /><small>MXN</small></div></label>
+                </>}
+
+                <label className="settings-toggle full-field">
+                  <input type="checkbox" checked={form.giftCardExpirationEnabled} onChange={(event) => updateField("giftCardExpirationEnabled", event.target.checked)} />
+                  <span className="toggle-control" />
+                  <span><strong>Configurar vencimiento</strong><br /><small>Deshabilitado por defecto; se fija al crear la venta.</small></span>
+                </label>
+
+                {form.giftCardExpirationEnabled && <label><span>Días de vigencia</span><input type="number" min={1} step={1} value={form.giftCardValidityDays} onChange={(event) => updateField("giftCardValidityDays", normalizeNumericInput(event.target.value))} /></label>}
+              </div>
+            </section>
+          )}
 
           {isCashbackProgram && (
             <section className="settings-card">
@@ -2356,7 +2669,7 @@ export default function CardEditorPage() {
               foregroundColor={form.cardForegroundColor}
               labelColor={form.cardLabelColor}
               targetValue={
-                isCashbackProgram || isCouponProgram
+                isCashbackProgram || isCouponProgram || isGiftCardProgram
                   ? null
                   : Number(form.targetValue) || 0
               }
@@ -2393,6 +2706,8 @@ export default function CardEditorPage() {
               balance={
                 isCashbackProgram
                   ? 40
+                  : isGiftCardProgram
+                    ? form.giftCardPresetAmounts.find((preset) => preset.isActive)?.amount ?? 500
                   : isCouponProgram
                     ? 0
                     : isPointsProgram

@@ -2692,6 +2692,75 @@ input {
   line-height: 1.5;
 }
 
+.gift-card-presets {
+  display: grid;
+  gap: 12px;
+}
+
+.gift-card-presets-heading,
+.gift-card-preset-row,
+.gift-card-preset-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gift-card-presets-heading {
+  justify-content: space-between;
+}
+
+.gift-card-presets-heading small {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+}
+
+.gift-card-presets-heading button,
+.gift-card-preset-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  font-weight: 750;
+}
+
+.gift-card-preset-actions button:disabled {
+  opacity: .4;
+}
+
+.gift-card-preset-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 13px;
+  padding: 12px;
+}
+
+.gift-card-preset-row > label:first-child {
+  flex: 1;
+}
+
+.gift-card-preset-active {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+}
+
+@media (max-width: 600px) {
+  .gift-card-presets-heading,
+  .gift-card-preset-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gift-card-preset-actions button {
+    flex: 1;
+  }
+}
+
 /* Campos */
 
 .settings-fields {

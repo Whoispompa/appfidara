@@ -27,6 +27,7 @@ import {
 
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -194,6 +195,28 @@ type ApiPayload = {
   reward?: CardInformation["reward"];
 };
 
+type GiftCardInformation = {
+  id?: string;
+  programName?: string;
+  recipientName?: string;
+  balance: number;
+  originalAmount?: number;
+  amount?: number;
+  currency?: string;
+  status?: number;
+  expiresAtUtc?: string | null;
+};
+
+type GiftCardRedeemResult = {
+  operationId?: string;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  amount?: number;
+  status?: number;
+  replayed?: boolean;
+  warnings?: string[];
+};
+
 function resolveLogoUrl(value?: string | null) {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
@@ -230,6 +253,7 @@ function getErrorMessage(caught: unknown, fallback: string) {
 }
 
 export default function ScannerPage() {
+  const [currentTimestamp] = useState(() => Date.now());
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [manualMode, setManualMode] = useState(false);
   const [qrToken, setQrToken] = useState("");
@@ -243,6 +267,13 @@ export default function ScannerPage() {
   const [couponDialogOpen, setCouponDialogOpen] = useState(false);
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const [card, setCard] = useState<CardInformation | null>(null);
+  const [giftCard, setGiftCard] = useState<GiftCardInformation | null>(null);
+  const [giftCardAmount, setGiftCardAmount] = useState("");
+  const [giftCardReference, setGiftCardReference] = useState("");
+  const [giftCardDialogOpen, setGiftCardDialogOpen] = useState(false);
+  const [redeemingGiftCard, setRedeemingGiftCard] = useState(false);
+  const [giftCardRedemption, setGiftCardRedemption] =
+    useState<GiftCardRedeemResult | null>(null);
 
   const brandLogoUrl = useMemo(
     () => resolveLogoUrl(card?.program.logoUrl ?? card?.organization.logoUrl),
@@ -285,7 +316,7 @@ export default function ScannerPage() {
   const couponExpired = Boolean(
     card?.coupon?.expired ??
     card?.couponExpired ??
-    (couponExpiresAt && new Date(couponExpiresAt).getTime() < Date.now()),
+    (couponExpiresAt && new Date(couponExpiresAt).getTime() < currentTimestamp),
   );
   const couponAvailable = Boolean(
     card?.couponAvailable ?? (!couponExpired && couponRemainingUses > 0),
@@ -477,12 +508,35 @@ export default function ScannerPage() {
     async (rawValue: string) => {
       const cleanToken = rawValue.trim();
 
-      if (!cleanToken || loading || card) return;
+      if (!cleanToken || loading || card || giftCard) return;
 
       setLoading(true);
       setQrToken(cleanToken);
 
       try {
+        const giftResponse = await fetch("/api/gift-cards/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qrToken: cleanToken }),
+        });
+
+        const giftPayload = await giftResponse.json().catch(() => ({}));
+
+        if (giftResponse.ok) {
+          const result = (giftPayload.data ?? giftPayload) as GiftCardInformation;
+          setGiftCard(result);
+          setGiftCardAmount(String(result.balance ?? ""));
+          setCameraEnabled(false);
+          setManualMode(false);
+          return;
+        }
+
+        if (giftResponse.status !== 404) {
+          throw new Error(
+            giftPayload.message ?? "No fue posible consultar la Gift Card.",
+          );
+        }
+
         const response = await fetch("/api/wallet/cards/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -509,8 +563,78 @@ export default function ScannerPage() {
         setLoading(false);
       }
     },
-    [card, loading],
+    [card, giftCard, loading],
   );
+
+  async function redeemGiftCard() {
+    if (!giftCard || redeemingGiftCard) return;
+
+    const amount = Number(giftCardAmount);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      amount > giftCard.balance ||
+      Math.round(amount * 100) !== amount * 100
+    ) {
+      toast.error("Ingresa un importe válido que no supere el saldo.");
+      return;
+    }
+
+    setRedeemingGiftCard(true);
+    try {
+      const storageKey = `fidara_gift_redeem_${giftCard.id ?? "scanned"}`;
+      let idempotencyKey = sessionStorage.getItem(storageKey);
+      if (!idempotencyKey) {
+        idempotencyKey = `redeem-${crypto.randomUUID()}`;
+        sessionStorage.setItem(storageKey, idempotencyKey);
+      }
+
+      const response = await fetch("/api/gift-cards/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qrToken,
+          amount,
+          idempotencyKey,
+          reference: giftCardReference.trim() || null,
+          notes: null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible confirmar el canje.");
+      }
+
+      const result = (payload.data ?? payload) as GiftCardRedeemResult;
+      setGiftCardRedemption(result);
+      setGiftCard((current) =>
+        current
+          ? { ...current, balance: result.balanceAfter ?? current.balance }
+          : current,
+      );
+      setGiftCardAmount(String(result.balanceAfter ?? 0));
+      setGiftCardDialogOpen(false);
+      sessionStorage.removeItem(storageKey);
+
+      const walletPending = result.warnings?.some((warning) =>
+        warning.includes("WALLET_UPDATE_PENDING"),
+      );
+      toast.success(result.replayed ? "Canje recuperado" : "Canje confirmado", {
+        description: walletPending
+          ? "El saldo se descontó. La sincronización con Wallet continúa pendiente."
+          : `Saldo restante: ${formatMoney(result.balanceAfter)}`,
+      });
+    } catch (caught) {
+      toast.error("El canje no se pudo confirmar", {
+        description: getErrorMessage(
+          caught,
+          "Reintenta la misma operación; no se generará una clave nueva.",
+        ),
+      });
+    } finally {
+      setRedeemingGiftCard(false);
+    }
+  }
 
   async function submitManualToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1039,6 +1163,11 @@ export default function ScannerPage() {
 
   function resetScanner() {
     setCard(null);
+    setGiftCard(null);
+    setGiftCardAmount("");
+    setGiftCardReference("");
+    setGiftCardDialogOpen(false);
+    setGiftCardRedemption(null);
     setQrToken("");
     setPurchaseAmount("");
     setCashbackToRedeem("");
@@ -1051,10 +1180,10 @@ export default function ScannerPage() {
   return (
     <main
       className={`mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] text-black ${
-        card ? "pb-6 pt-4" : "pb-12 pt-8"
+        card || giftCard ? "pb-6 pt-4" : "pb-12 pt-8"
       }`}
     >
-      {!card && (
+      {!card && !giftCard && (
         <section className="mb-7">
           <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e11d48]">
             Atención al cliente
@@ -1068,7 +1197,7 @@ export default function ScannerPage() {
         </section>
       )}
 
-      {!card && (
+      {!card && !giftCard && (
         <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
           {cameraEnabled && (
             <div className="flex flex-col items-center px-4 py-8 sm:px-8">
@@ -1167,6 +1296,69 @@ export default function ScannerPage() {
           )}
         </Card>
       )}
+
+      {giftCard && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+          <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+              <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-[#fff1f4] text-[#e11d48]"><Gift size={24} /></span>
+              <div className="min-w-0">
+                <small className="font-extrabold uppercase tracking-[0.13em] text-[#e11d48]">Gift Card encontrada</small>
+                <h2 className="truncate text-2xl font-extrabold tracking-[-0.035em] text-black">{giftCard.recipientName ?? "Destinatario"}</h2>
+                <p className="truncate text-sm text-slate-500">{giftCard.programName ?? "Tarjeta de regalo"}</p>
+              </div>
+              <Button type="button" variant="outline" className="ml-auto h-10 shrink-0 rounded-xl border-[#e5e7eb] bg-white px-3 font-extrabold shadow-sm sm:px-4" onClick={resetScanner}><RotateCcw className="size-4 sm:mr-2" /><span className="hidden sm:inline">Escanear otra</span></Button>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <div className="rounded-[20px] bg-[#111827] p-5 text-white sm:p-6">
+                <small className="font-extrabold uppercase tracking-[0.14em] text-rose-300">Saldo disponible</small>
+                <strong className="mt-1 block text-4xl font-extrabold tracking-[-0.045em]">{formatMoney(giftCard.balance)}</strong>
+                <div className="mt-6 grid gap-3 border-t border-white/15 pt-5 sm:grid-cols-3">
+                  <div><small className="text-slate-400">Importe original</small><strong className="block">{formatMoney(giftCard.originalAmount ?? giftCard.amount)}</strong></div>
+                  <div><small className="text-slate-400">Estado</small><strong className="block">{{ 1: "Pago pendiente", 2: "Activa", 3: "Agotada", 4: "Vencida", 5: "Cancelada" }[giftCard.status ?? 0] ?? "No disponible"}</strong></div>
+                  <div><small className="text-slate-400">Vencimiento</small><strong className="block">{giftCard.expiresAtUtc ? formatDate(giftCard.expiresAtUtc) : "Sin vencimiento"}</strong></div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="gift-card-amount" className="font-bold">Importe a utilizar</Label>
+                  <Input id="gift-card-amount" type="number" min="0.01" max={giftCard.balance} step="0.01" inputMode="decimal" className="mt-2 h-12 rounded-xl" value={giftCardAmount} onChange={(event) => setGiftCardAmount(event.target.value)} />
+                  <Button type="button" variant="ghost" className="mt-1 h-8 px-0 text-sm font-bold text-[#e11d48]" onClick={() => setGiftCardAmount(String(giftCard.balance))}>Utilizar saldo completo</Button>
+                </div>
+                <div>
+                  <Label htmlFor="gift-card-reference" className="font-bold">Referencia opcional</Label>
+                  <Input id="gift-card-reference" className="mt-2 h-12 rounded-xl" maxLength={100} value={giftCardReference} onChange={(event) => setGiftCardReference(event.target.value)} placeholder="Ej. ticket-123" />
+                </div>
+              </div>
+
+              <Button type="button" className="mt-4 h-12 rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white hover:bg-[#be123c]" disabled={redeemingGiftCard || giftCard.balance <= 0} onClick={() => {
+                const amount = Number(giftCardAmount);
+                if (!Number.isFinite(amount) || amount <= 0 || amount > giftCard.balance) {
+                  toast.error("Ingresa un importe positivo que no supere el saldo.");
+                  return;
+                }
+                setGiftCardDialogOpen(true);
+              }}><Banknote className="mr-2 size-5" /> Confirmar canje</Button>
+
+              {giftCardRedemption && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950" role="status"><strong className="flex items-center gap-2"><Check size={18} /> Canje confirmado</strong><div className="mt-3 grid gap-2 text-sm sm:grid-cols-4"><span>Utilizado <b>{formatMoney(giftCardRedemption.amount ?? ((giftCardRedemption.balanceBefore ?? 0) - (giftCardRedemption.balanceAfter ?? 0)))}</b></span><span>Saldo anterior <b>{formatMoney(giftCardRedemption.balanceBefore)}</b></span><span>Saldo restante <b>{formatMoney(giftCardRedemption.balanceAfter)}</b></span><span>Operación <b className="break-all">{giftCardRedemption.operationId ?? "Confirmada"}</b></span></div></div>}
+            </div>
+          </Card>
+
+          <Card className="h-fit rounded-[18px] border-[#e5e7eb] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.045)]">
+            <h3 className="text-lg font-extrabold tracking-[-0.025em] text-black">Canje seguro</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">La validación local no sustituye al servidor. El saldo sólo cambia después de recibir una respuesta confirmada.</p>
+          </Card>
+        </div>
+      )}
+
+      <AlertDialog open={giftCardDialogOpen} onOpenChange={(open) => !redeemingGiftCard && setGiftCardDialogOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Confirmar canje de Gift Card</AlertDialogTitle><AlertDialogDescription>Se descontarán {formatMoney(Number(giftCardAmount))} del saldo de {giftCard?.recipientName ?? "la tarjeta"}. Verifica el importe antes de continuar.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={redeemingGiftCard}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={redeemingGiftCard} onClick={(event) => { event.preventDefault(); void redeemGiftCard(); }}>{redeemingGiftCard ? "Canjeando…" : "Sí, descontar saldo"}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {card && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">

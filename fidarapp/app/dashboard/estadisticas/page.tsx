@@ -388,6 +388,8 @@ export default function StatisticsPage() {
   );
 
   useEffect(() => {
+    // Carga inicial de las métricas existentes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadStatistics(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -652,6 +654,12 @@ export default function StatisticsPage() {
                 </option>
                 <option value="3">
                   Cashback
+                </option>
+                <option value="4">
+                  Cupones
+                </option>
+                <option value="5">
+                  Gift Cards
                 </option>
               </select>
             </label>
