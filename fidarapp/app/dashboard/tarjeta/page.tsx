@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Check,
   CreditCard,
+  Gift,
   LoaderCircle,
   Plus,
   Trash2,
@@ -12,18 +13,9 @@ import {
   WalletCards,
 } from "lucide-react";
 import { WalletCardPreview } from "@/components/dashboard/wallet-card-preview";
+import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 type ProgramSummary = {
   id: string;
@@ -53,6 +45,11 @@ type ProgramSummary = {
   showPoweredByFidara: boolean;
   customerCount: number;
   installedCards: number;
+  giftCardPresetAmounts?: Array<{
+    amount: number;
+    isActive: boolean;
+    displayOrder: number;
+  }>;
 
   reward?: {
     id: string;
@@ -61,6 +58,18 @@ type ProgramSummary = {
     requiredValue: number;
   } | null;
 };
+
+type ProgramFilter = "all" | 1 | 2 | 3 | 4 | 5 | 6;
+
+const programFilters: Array<{ value: ProgramFilter; label: string }> = [
+  { value: "all", label: "Todas" },
+  { value: 1, label: "Sellos" },
+  { value: 2, label: "Puntos" },
+  { value: 3, label: "Cashback" },
+  { value: 4, label: "Cupones" },
+  { value: 6, label: "Suscripciones" },
+  { value: 5, label: "Gift Cards" },
+];
 
 const apiUrl =
   process.env.NEXT_PUBLIC_FIDARA_API_URL ?? "https://api.fidara.mx";
@@ -95,6 +104,13 @@ export default function ProgramsPage() {
   );
 
   const [deleting, setDeleting] = useState(false);
+
+  const [activeFilter, setActiveFilter] = useState<ProgramFilter>("all");
+
+  const filteredPrograms =
+    activeFilter === "all"
+      ? programs
+      : programs.filter((program) => program.programType === activeFilter);
 
   const loadPrograms = useCallback(async () => {
     setLoading(true);
@@ -204,6 +220,12 @@ export default function ProgramsPage() {
     void loadPrograms();
   }, [loadPrograms]);
 
+  useEffect(() => {
+    const refreshVisiblePrograms = () => void loadPrograms();
+    window.addEventListener("focus", refreshVisiblePrograms);
+    return () => window.removeEventListener("focus", refreshVisiblePrograms);
+  }, [loadPrograms]);
+
   if (loading) {
     return (
       <div className="programs-loading">
@@ -243,18 +265,45 @@ export default function ProgramsPage() {
         </div>
       )}
 
-      <section className="program-gallery">
-        <Link href="/dashboard/tarjeta/nueva" className="new-program-tile">
-          <div className="new-program-preview">
-            <Plus size={34} />
-          </div>
+      <nav className="program-filters" aria-label="Filtrar tarjetas por modalidad">
+        {programFilters.map((filter) => (
+          <button
+            key={filter.value}
+            type="button"
+            className={activeFilter === filter.value ? "active" : ""}
+            aria-pressed={activeFilter === filter.value}
+            onClick={() => setActiveFilter(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </nav>
 
-          <strong>Crear una tarjeta</strong>
+      {activeFilter !== "all" && filteredPrograms.length === 0 ? (
+        <section className="program-filter-empty" aria-live="polite">
+          <span><WalletCards size={26} /></span>
+          <h2>No hay tarjetas de esta modalidad</h2>
+          <p>Crea una tarjeta nueva o selecciona otro filtro para continuar.</p>
+          <Link href="/dashboard/tarjeta/nueva">
+            <Plus size={17} />
+            Crear tarjeta
+          </Link>
+        </section>
+      ) : (
+        <section className="program-gallery">
+          {activeFilter === "all" && (
+            <Link href="/dashboard/tarjeta/nueva" className="new-program-tile">
+              <div className="new-program-preview">
+                <Plus size={34} />
+              </div>
 
-          <span>Diseña un nuevo programa desde cero.</span>
-        </Link>
+              <strong>Crear una tarjeta</strong>
 
-        {programs.map((program) => {
+              <span>Diseña un nuevo programa desde cero.</span>
+            </Link>
+          )}
+
+        {filteredPrograms.map((program) => {
           const target = Math.max(
             1,
             Math.round(Number(program.targetValue) || 10),
@@ -267,6 +316,12 @@ export default function ProgramsPage() {
           const inactiveStampUrl = absoluteUrl(program.inactiveStampImageUrl);
 
           const stripImageUrl = absoluteUrl(program.cardStripImageUrl);
+
+          const giftCardPreviewAmount =
+            program.giftCardPresetAmounts
+              ?.filter((preset) => preset.isActive)
+              .sort((left, right) => left.displayOrder - right.displayOrder)[0]
+              ?.amount ?? 0;
 
           return (
             <article key={program.id} className="loyalty-program-tile">
@@ -305,7 +360,9 @@ export default function ProgramsPage() {
                       program.cardStripColor ?? program.cardBackgroundColor
                     }
                     targetValue={target}
-                    balance={program.programType === 5 ? 500 : 4}
+                    balance={
+                      program.programType === 5 ? giftCardPreviewAmount : 4
+                    }
                     rewardsAvailable={0}
                     showPoweredByFidara={program.showPoweredByFidara}
                     compact
@@ -321,6 +378,8 @@ export default function ProgramsPage() {
                   <p>
                     {program.programType === 5
                       ? "Tarjeta de regalo con saldo digital"
+                      : program.programType === 6
+                        ? "SuscripciÃ³n con planes y beneficios"
                       : program.programType === 4
                       ? program.couponBenefitType === 1
                         ? `${program.couponBenefitValue ?? 0}% de descuento`
@@ -348,6 +407,16 @@ export default function ProgramsPage() {
                 </div>
 
                 <div className="program-actions">
+                  {program.programType === 5 && program.isActive && (
+                    <Link
+                      href={`/dashboard/tarjeta/${program.id}#venta-gift-card`}
+                      className="edit-program-button"
+                    >
+                      <Gift size={17} />
+                      Vender tarjeta de regalo
+                    </Link>
+                  )}
+
                   <Link
                     href={`/dashboard/tarjeta/${program.id}`}
                     className="edit-program-button"
@@ -380,68 +449,43 @@ export default function ProgramsPage() {
             </article>
           );
         })}
-      </section>
-      <AlertDialog
+        </section>
+      )}
+      <FidaraConfirmDialog
         open={programToDelete !== null}
         onOpenChange={(open) => {
           if (!open && !deleting) {
             setProgramToDelete(null);
           }
         }}
+        icon={<Trash2 size={22} />}
+        iconClassName="bg-red-50 text-red-600"
+        title="¿Eliminar esta tarjeta?"
+        description={
+          <>
+            Estás por eliminar <strong className="text-[#111827]">{programToDelete?.name}</strong>.
+          </>
+        }
+        cancelLabel="Cancelar"
+        confirmLabel="Sí, eliminar"
+        busyLabel="Procesando..."
+        confirmIcon={<Trash2 size={17} />}
+        confirmClassName="delete-program-confirm"
+        busy={deleting}
+        onConfirm={() => void deleteProgram()}
       >
-        <AlertDialogContent className="delete-program-dialog">
-          <AlertDialogHeader>
-            <div className="delete-program-icon">
-              <Trash2 size={22} />
-            </div>
-
-            <AlertDialogTitle>¿Eliminar esta tarjeta?</AlertDialogTitle>
-
-            <AlertDialogDescription>
-              Estás por eliminar <strong>{programToDelete?.name}</strong>.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <div className="delete-program-warning">
-            <strong>¿Qué sucederá?</strong>
-
-            <p>
-              Si la tarjeta nunca ha sido entregada a clientes, se eliminará
-              definitivamente.
-            </p>
-
-            <p>
-              Si ya tiene clientes o movimientos, se archivará para conservar su
-              historial.
-            </p>
-          </div>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
-
-            <AlertDialogAction
-              className="delete-program-confirm"
-              disabled={deleting}
-              onClick={(event) => {
-                event.preventDefault();
-                void deleteProgram();
-              }}
-            >
-              {deleting ? (
-                <>
-                  <LoaderCircle className="scanner-spinner" size={17} />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <Trash2 size={17} />
-                  Sí, eliminar
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <div className="delete-program-warning">
+          <strong>¿Qué sucederá?</strong>
+          <p>
+            Si la tarjeta nunca ha sido entregada a clientes, se eliminará
+            definitivamente.
+          </p>
+          <p>
+            Si ya tiene clientes o movimientos, se archivará para conservar su
+            historial.
+          </p>
+        </div>
+      </FidaraConfirmDialog>
     </main>
   );
 }

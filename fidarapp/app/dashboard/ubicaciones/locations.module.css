@@ -655,98 +655,6 @@
   opacity: 0.5;
 }
 
-/* Tablet */
-
-@media (max-width: 1100px) {
-  .listHeader {
-    display: none;
-  }
-
-  .locationRow {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "location status"
-      "movements verification"
-      "actions actions";
-    gap: 14px 20px;
-    padding: 18px 20px;
-  }
-
-  .locationMain {
-    grid-area: location;
-  }
-
-  .statusCell {
-    grid-area: status;
-    justify-content: flex-end;
-  }
-
-  .dataCell {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .dataCell:nth-of-type(3) {
-    grid-area: movements;
-    padding-left: 55px;
-  }
-
-  .dataCell:nth-of-type(4) {
-    grid-area: verification;
-    justify-content: flex-end;
-  }
-
-  .cellLabel {
-    display: inline;
-    color: #6b7280;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .rowActions {
-    grid-area: actions;
-    justify-content: flex-start;
-    padding-left: 55px;
-  }
-}
-
-/* Móvil */
-
-@media (max-width: 680px) {
-  .locationRow {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 15px 12px;
-    padding: 17px;
-  }
-
-  .locationCopy h2 {
-    white-space: normal;
-  }
-
-  .locationAddress span {
-    display: -webkit-box;
-    overflow: hidden;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .dataCell:nth-of-type(3) {
-    padding-left: 0;
-  }
-
-  .rowActions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding-left: 0;
-  }
-
-  .rowActions button {
-    border-color: #e5e7eb;
-  }
-}
-
 .loadingState,
 .emptyState {
   display: flex;
@@ -1255,17 +1163,19 @@
       "location status"
       "movements verification"
       "actions actions";
-    gap: 14px 18px;
+    gap: 14px 20px;
     min-height: auto;
     padding: 18px 20px;
   }
 
   .locationMain {
     grid-area: location;
+    align-items: flex-start;
   }
 
   .statusCell {
     grid-area: status;
+    align-self: start;
     justify-content: flex-end;
   }
 
@@ -1293,9 +1203,19 @@
   }
 
   .rowActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(140px, 180px));
     grid-area: actions;
     justify-content: flex-start;
     padding-left: 55px;
+    gap: 8px;
+  }
+
+  .rowActions button {
+    width: 100%;
+    min-height: 42px;
+    border-color: #e5e7eb;
+    background: #ffffff;
   }
 }
 
@@ -1375,8 +1295,24 @@
 
   .rowActions button {
     width: 100%;
-    min-height: 38px;
+    min-height: 42px;
     border: 1px solid #e5e7eb;
+  }
+}
+
+@container locations-panel (max-width: 760px) {
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchBox {
+    width: 100%;
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1470,5 +1406,83 @@
 
   .heading h1 {
     font-size: 31px;
+  }
+}
+
+/* Alineación de layout con Clientes */
+.page {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 22px;
+  padding: 0;
+}
+
+.heading,
+.errorBox,
+.panel {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.headingActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel,
+.toolbar,
+.locationList {
+  min-width: 0;
+}
+
+.searchBox {
+  width: min(590px, 100%);
+  min-width: 0;
+}
+
+.filters {
+  flex-shrink: 0;
+  gap: 3px;
+}
+
+@media (max-width: 900px) {
+  .page {
+    gap: 20px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchBox {
+    width: 100%;
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .headingActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .primaryButton {
+    width: 100%;
   }
 }

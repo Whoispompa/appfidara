@@ -1,20 +1,23 @@
 "use client";
 
-import { formatDate } from "@/components/lib/date-time";
+import {
+  formatDate,
+  formatDateOnly,
+  formatDateTime,
+} from "@/components/lib/date-time";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
   Check,
   CreditCard,
+  FileSpreadsheet,
   LoaderCircle,
   Search,
-  Stamp,
-  UserRound,
   Users,
-  WalletCards,
   X,
 } from "lucide-react";
 import {useCallback, useEffect, useState } from "react";
@@ -59,6 +62,71 @@ type CustomersResponse = {
   pagination: Pagination;
 };
 
+type CustomerCard = {
+  id: string;
+  programId: string;
+  programName: string;
+  cardNumber: string;
+  balance: number;
+  lifetimeEarned: number;
+  lifetimeRedeemed: number;
+  status: number;
+  transactionCount: number;
+  walletPassCount: number;
+  activatedAt: string;
+  lastActivityAt?: string | null;
+  createdAt: string;
+};
+
+type CustomerDetail = {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  fullName: string;
+  email?: string | null;
+  phone?: string | null;
+  birthDate?: string | null;
+  marketingConsent: boolean;
+  isActive: boolean;
+  lastVisitAt?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  summary: {
+    cardCount: number;
+    activeCardCount: number;
+  };
+  cards: CustomerCard[];
+};
+
+type CustomerDetailResponse = {
+  success: boolean;
+  message?: string;
+  data: CustomerDetail;
+};
+
+type ExportProgram = {
+  id: string;
+  name: string;
+  programType: number;
+  isActive: boolean;
+  reward?: {
+    name: string;
+    description?: string | null;
+    requiredValue: number;
+  } | null;
+};
+
+type ExportMembership = {
+  id: string;
+  programId: string;
+  customerId: string;
+  status: number;
+  currentPlanName?: string | null;
+  currentTermStartsAtUtc?: string | null;
+  currentTermEndsAtUtc?: string | null;
+  createdAtUtc: string;
+};
+
 type StatusFilter = "all" | "active" | "inactive";
 
 type StatusConfirmation = {
@@ -82,6 +150,62 @@ function getInitials(customer: Customer) {
   return `${first}${last || first}`.toUpperCase();
 }
 
+function formatBirthday(value?: string | null) {
+  if (!value) return "No registrado";
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return "No registrado";
+
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+  if (Number.isNaN(date.getTime())) return "No registrado";
+
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function escapeCsvValue(value: string | number | null | undefined) {
+  let text = value == null ? "" : String(value);
+
+  if (/^[\s]*[=+\-@\t\r]/.test(text)) {
+    text = `'${text}`;
+  }
+
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function localDateStamp(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function programTypeLabel(programType?: number) {
+  return (
+    {
+      1: "Sellos",
+      2: "Puntos",
+      3: "Cashback",
+      4: "Cupones",
+      5: "Gift Card",
+      6: "Suscripción",
+    }[programType ?? 0] ?? ""
+  );
+}
+
+function membershipStatusLabel(status?: number) {
+  return (
+    { 1: "Pendiente", 2: "Activa", 3: "Vencida", 4: "Cancelada" }[
+      status ?? 0
+    ] ?? ""
+  );
+}
+
 export default function CustomersPage() {
   const router = useRouter();
 
@@ -92,10 +216,10 @@ export default function CustomersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
   const [error, setError] = useState("");
-  const [updatingCustomerId, setUpdatingCustomerId] = useState<string | null>(
-    null,
-  );
+  const [, setUpdatingCustomerId] = useState<string | null>(null);
   const [statusConfirmation, setStatusConfirmation] =
     useState<StatusConfirmation>(null);
 
@@ -145,6 +269,8 @@ export default function CustomersPage() {
   }, [page, router, search, statusFilter]);
 
   useEffect(() => {
+    // Carga inicial y recarga al cambiar paginación o filtros.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCustomers();
   }, [loadCustomers]);
 
@@ -231,19 +357,255 @@ useEffect(() => {
     }
   }
 
-  const activeCustomers = customers.filter(
-    (customer) => customer.isActive,
-  ).length;
+  async function exportCustomersCsv() {
+    if (exporting) return;
 
-  const installedCards = customers.reduce(
-    (total, customer) => total + customer.walletPassCount,
-    0,
-  );
+    setExporting(true);
+    setExportProgress("Preparando...");
 
-  const accumulatedBalance = customers.reduce(
-    (total, customer) => total + customer.totalBalance,
-    0,
-  );
+    try {
+      const allCustomers: Customer[] = [];
+      const pageSize = 100;
+      let exportPage = 1;
+
+      while (true) {
+        setExportProgress(`Cargando clientes · página ${exportPage}`);
+        const params = new URLSearchParams({
+          page: String(exportPage),
+          pageSize: String(pageSize),
+        });
+        const response = await fetch(`/api/customers?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as CustomersResponse;
+
+        if (response.status === 401) {
+          router.replace("/login");
+          throw new Error("Tu sesión ha expirado.");
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            payload.message ?? "No fue posible obtener todos los clientes.",
+          );
+        }
+
+        allCustomers.push(...(Array.isArray(payload.data) ? payload.data : []));
+
+        const totalPages = Math.max(
+          1,
+          Number(payload.pagination?.totalPages) || 1,
+        );
+        const hasNextPage =
+          payload.pagination?.hasNextPage ?? exportPage < totalPages;
+
+        if (!hasNextPage || exportPage >= totalPages) break;
+        exportPage += 1;
+      }
+
+      const programsRequest = fetch("/api/programs", { cache: "no-store" });
+      const details: CustomerDetail[] = [];
+      const detailBatchSize = 6;
+
+      for (let index = 0; index < allCustomers.length; index += detailBatchSize) {
+        const batch = allCustomers.slice(index, index + detailBatchSize);
+        const batchDetails = await Promise.all(
+          batch.map(async (customer) => {
+            const response = await fetch(
+              `/api/customers/${encodeURIComponent(customer.id)}`,
+              { cache: "no-store" },
+            );
+            const payload = (await response.json()) as CustomerDetailResponse;
+
+            if (response.status === 401) {
+              router.replace("/login");
+              throw new Error("Tu sesión ha expirado.");
+            }
+            if (!response.ok || !payload.data) {
+              throw new Error(
+                payload.message ??
+                  `No fue posible obtener el detalle de ${customer.fullName}.`,
+              );
+            }
+            return payload.data;
+          }),
+        );
+        details.push(...batchDetails);
+        setExportProgress(
+          `Detalles ${Math.min(index + batch.length, allCustomers.length)}/${allCustomers.length}`,
+        );
+      }
+
+      const programsResponse = await programsRequest;
+      const programsPayload = (await programsResponse.json()) as {
+        message?: string;
+        data?: ExportProgram[];
+      };
+      if (!programsResponse.ok) {
+        throw new Error(
+          programsPayload.message ?? "No fue posible obtener los programas.",
+        );
+      }
+      const programsById = new Map(
+        (programsPayload.data ?? []).map((program) => [program.id, program]),
+      );
+
+      const membershipsByCustomerProgram = new Map<string, ExportMembership>();
+      let membershipPage = 1;
+      while (true) {
+        const query = new URLSearchParams({
+          page: String(membershipPage),
+          pageSize: "100",
+        });
+        const response = await fetch(`/api/subscription-memberships?${query}`, {
+          cache: "no-store",
+        });
+
+        if (response.status === 404) break;
+        const payload = (await response.json()) as {
+          message?: string;
+          data?: { items?: ExportMembership[] };
+        };
+        if (!response.ok) {
+          throw new Error(
+            payload.message ?? "No fue posible obtener las suscripciones.",
+          );
+        }
+
+        const items = payload.data?.items ?? [];
+        let added = 0;
+        for (const membership of items) {
+          const key = `${membership.customerId}:${membership.programId}`;
+          if (!membershipsByCustomerProgram.has(key)) added += 1;
+          membershipsByCustomerProgram.set(key, membership);
+        }
+        if (items.length === 0 || added === 0) break;
+        membershipPage += 1;
+      }
+
+      setExportProgress("Generando archivo...");
+      const headers = [
+        "ID cliente",
+        "Nombre(s)",
+        "Apellidos",
+        "Nombre completo",
+        "Correo",
+        "Teléfono",
+        "Fecha de nacimiento",
+        "Consentimiento de marketing",
+        "Estado del cliente",
+        "Fecha de alta del cliente",
+        "Última actualización del cliente",
+        "Última visita",
+        "Total de tarjetas",
+        "Tarjetas activas",
+        "ID tarjeta",
+        "Número de tarjeta",
+        "Programa",
+        "Modalidad",
+        "Estado del programa",
+        "Estado de la tarjeta",
+        "Balance de la tarjeta según modalidad",
+        "Acumulado histórico de la tarjeta",
+        "Canjeado histórico de la tarjeta",
+        "Transacciones",
+        "Pases Wallet instalados",
+        "Fecha de activación de la tarjeta",
+        "Fecha de alta de la tarjeta",
+        "Última actividad de la tarjeta",
+        "Recompensa",
+        "Descripción de recompensa",
+        "Valor requerido para recompensa",
+        "Plan de suscripción",
+        "Estado de suscripción",
+        "Inicio de vigencia de suscripción",
+        "Fin de vigencia de suscripción",
+        "Fecha de alta de suscripción",
+      ];
+      const dataRows = details.flatMap((customer) => {
+        const cards: Array<CustomerCard | null> =
+          customer.cards.length > 0 ? customer.cards : [null];
+
+        return cards.map((card) => {
+          const program = card ? programsById.get(card.programId) : undefined;
+          const membership = card
+            ? membershipsByCustomerProgram.get(
+                `${customer.id}:${card.programId}`,
+              )
+            : undefined;
+
+          return [
+            customer.id,
+            customer.firstName,
+            customer.lastName ?? "",
+            customer.fullName,
+            customer.email ?? "",
+            customer.phone ?? "",
+            formatDateOnly(customer.birthDate, {}, ""),
+            customer.marketingConsent ? "Sí" : "No",
+            customer.isActive ? "Activo" : "Inactivo",
+            formatDateTime(customer.createdAt, {}, ""),
+            formatDateTime(customer.updatedAt, {}, ""),
+            formatDateTime(customer.lastVisitAt, {}, ""),
+            customer.summary.cardCount,
+            customer.summary.activeCardCount,
+            card?.id ?? "",
+            card?.cardNumber ?? "",
+            card?.programName ?? program?.name ?? "",
+            programTypeLabel(program?.programType),
+            program ? (program.isActive ? "Activo" : "Inactivo") : "",
+            card ? (card.status === 1 ? "Activa" : "Inactiva") : "",
+            card?.balance ?? "",
+            card?.lifetimeEarned ?? "",
+            card?.lifetimeRedeemed ?? "",
+            card?.transactionCount ?? "",
+            card?.walletPassCount ?? "",
+            formatDateTime(card?.activatedAt, {}, ""),
+            formatDateTime(card?.createdAt, {}, ""),
+            formatDateTime(card?.lastActivityAt, {}, ""),
+            program?.reward?.name ?? "",
+            program?.reward?.description ?? "",
+            program?.reward?.requiredValue ?? "",
+            membership?.currentPlanName ?? "",
+            membershipStatusLabel(membership?.status),
+            formatDateTime(membership?.currentTermStartsAtUtc, {}, ""),
+            formatDateTime(membership?.currentTermEndsAtUtc, {}, ""),
+            formatDateTime(membership?.createdAtUtc, {}, ""),
+          ];
+        });
+      });
+      const rows = [
+        headers,
+        ...dataRows,
+      ];
+      const csv = `\uFEFF${rows
+        .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
+        .join("\r\n")}`;
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const download = document.createElement("a");
+      download.href = url;
+      download.download = `fidara-clientes-${localDateStamp(new Date())}.csv`;
+      document.body.appendChild(download);
+      download.click();
+      download.remove();
+      URL.revokeObjectURL(url);
+
+      toast.success("Clientes exportados", {
+        description: `${details.length} clientes y ${dataRows.length} filas incluidos en el CSV.`,
+      });
+    } catch (caught) {
+      toast.error("No se pudo exportar el CSV", {
+        description:
+          caught instanceof Error
+            ? caught.message
+            : "Ocurrió un error inesperado.",
+      });
+    } finally {
+      setExporting(false);
+      setExportProgress("");
+    }
+  }
 
   return (
     <main className={styles.page}>
@@ -256,52 +618,21 @@ useEffect(() => {
           </p>
         </div>
 
-        <Link href="/dashboard/escanear" className={styles.primaryButton}>
-          <Stamp size={19} />
-          Agregar sello
-        </Link>
-      </section>
-
-      <section className={styles.metrics}>
-        <article>
-          <span className={`${styles.metricIcon} ${styles.coral}`}>
-            <Users size={21} />
-          </span>
-          <div>
-            <small>Total de clientes</small>
-            <strong>{loading ? "—" : pagination.total}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.mint}`}>
-            <UserRound size={21} />
-          </span>
-          <div>
-            <small>Activos en esta página</small>
-            <strong>{loading ? "—" : activeCustomers}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.lilac}`}>
-            <WalletCards size={21} />
-          </span>
-          <div>
-            <small>Pases instalados</small>
-            <strong>{loading ? "—" : installedCards}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.sun}`}>
-            <Stamp size={21} />
-          </span>
-          <div>
-            <small>Saldo en esta página</small>
-            <strong>{loading ? "—" : accumulatedBalance}</strong>
-          </div>
-        </article>
+        <div className={styles.headingActions}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            disabled={exporting}
+            onClick={() => void exportCustomersCsv()}
+          >
+            {exporting ? (
+              <LoaderCircle className={styles.buttonSpinner} size={18} />
+            ) : (
+              <FileSpreadsheet size={18} />
+            )}
+            {exporting ? exportProgress || "Exportando..." : "Exportar CSV"}
+          </button>
+        </div>
       </section>
 
       {error && (
@@ -387,16 +718,12 @@ useEffect(() => {
             <div className={styles.listHeader}>
               <span>Cliente</span>
               <span>Tarjetas</span>
-              <span>Saldo</span>
+              <span>Cumpleaños</span>
               <span>Última actividad</span>
-              <span>Estado</span>
-              <span />
             </div>
 
             <div className={styles.customerList}>
               {customers.map((customer) => {
-                const updating = updatingCustomerId === customer.id;
-
                 return (
                   <article
   className={styles.customerRow}
@@ -444,26 +771,18 @@ useEffect(() => {
                       <div>
                         <CreditCard size={16} />
                         <strong>
-                          {customer.activeCardCount}{" "}
-                          {customer.activeCardCount === 1
-                            ? "activa"
-                            : "activas"}
+                          {customer.cardCount}{" "}
+                          {customer.cardCount === 1 ? "tarjeta" : "tarjetas"}
                         </strong>
                       </div>
-                      <span>
-                        {customer.walletPassCount > 0
-                          ? `${customer.walletPassCount} en Wallet`
-                          : "Sin pase instalado"}
-                      </span>
                     </div>
 
-                    <div className={styles.customerBalance}>
-                      <small>Saldo</small>
+                    <div className={styles.customerBirthday}>
+                      <small>Cumpleaños</small>
                       <div>
-                        <Stamp size={16} />
-                        <strong>{customer.totalBalance}</strong>
+                        <CalendarDays size={16} />
+                        <strong>{formatBirthday(customer.birthDate)}</strong>
                       </div>
-                      <span>sellos disponibles</span>
                     </div>
 
                     <div className={styles.customerActivity}>
@@ -475,27 +794,6 @@ useEffect(() => {
                           "Sin actividad",
                         )}
                       </strong>
-                      <span>
-                        Alta:{" "}
-                        {formatDate(
-                          customer.createdAt,
-                          {},
-                          "Fecha no disponible",
-                        )}
-                      </span>
-                    </div>
-
-                    <div className={styles.customerState}>
-                      <span
-                        className={
-                          customer.isActive
-                            ? styles.activeBadge
-                            : styles.inactiveBadge
-                        }
-                      >
-                        <i />
-                        {customer.isActive ? "Activo" : "Inactivo"}
-                      </span>
                     </div>
 
                   </article>

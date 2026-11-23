@@ -3,6 +3,7 @@
 import { formatDateOnly, formatDateTime } from "@/components/lib/date-time";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { Dialog } from "@base-ui/react/dialog";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -11,21 +12,20 @@ import {
   Copy,
   CreditCard,
   ExternalLink,
-  Gift,
   Link2,
   LoaderCircle,
   Mail,
   Megaphone,
   Phone,
   QrCode,
-  Stamp,
   UserRound,
-  WalletCards,
   X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CustomerMemberships } from "@/components/subscriptions/customer-memberships";
+import { subscriptionsEnabled } from "@/lib/subscriptions";
 
 import styles from "./customer-detail.module.css";
 
@@ -76,6 +76,23 @@ type CustomerResponse = {
   data: CustomerDetail;
 };
 
+type ProgramSummary = {
+  id: string;
+  programType: number;
+};
+
+type ProgramsResponse = {
+  message?: string;
+  data?: ProgramSummary[];
+};
+
+type CardMetric = {
+  label: string;
+  value: string | number;
+  detail: string;
+  emphasized?: boolean;
+};
+
 const getAppUrl =
   process.env.NEXT_PUBLIC_GET_APP_URL ?? "https://get.fidara.mx";
 
@@ -84,6 +101,77 @@ function getInitials(customer: CustomerDetail) {
   const last = customer.lastName?.trim().charAt(0) ?? "";
 
   return `${first}${last || first}`.toUpperCase();
+}
+
+function getProgramTypeLabel(programType?: number) {
+  return (
+    {
+      1: "Sellos",
+      2: "Puntos",
+      3: "Cashback",
+      4: "Cupones",
+      5: "Gift Card",
+      6: "Suscripción",
+    }[programType ?? 0] ?? "Modalidad no disponible"
+  );
+}
+
+function getCardStatusLabel(status: number) {
+  return status === 1 ? "Activa" : "Inactiva";
+}
+
+function getCardMetrics(card: CustomerCard, programType?: number) {
+  const walletMetric: CardMetric = {
+    label: "Wallet",
+    value: card.walletPassCount > 0 ? "Instalada" : "No instalada",
+    detail: `${card.walletPassCount} ${card.walletPassCount === 1 ? "pase" : "pases"}`,
+  };
+
+  const modalityMetrics = {
+    1: [
+      { label: "Sellos disponibles", value: card.balance, detail: "sellos", emphasized: true },
+      { label: "Sellos acumulados", value: card.lifetimeEarned, detail: "históricos" },
+      { label: "Sellos canjeados", value: card.lifetimeRedeemed, detail: "utilizados" },
+    ],
+    2: [
+      { label: "Puntos disponibles", value: card.balance, detail: "puntos", emphasized: true },
+      { label: "Puntos acumulados", value: card.lifetimeEarned, detail: "históricos" },
+      { label: "Puntos canjeados", value: card.lifetimeRedeemed, detail: "utilizados" },
+    ],
+    3: [
+      { label: "Cashback disponible", value: card.balance, detail: "saldo", emphasized: true },
+      { label: "Cashback acumulado", value: card.lifetimeEarned, detail: "histórico" },
+      { label: "Cashback utilizado", value: card.lifetimeRedeemed, detail: "canjeado" },
+    ],
+    5: [
+      { label: "Saldo disponible", value: card.balance, detail: "Gift Card", emphasized: true },
+      { label: "Saldo acumulado", value: card.lifetimeEarned, detail: "histórico" },
+      { label: "Saldo utilizado", value: card.lifetimeRedeemed, detail: "canjeado" },
+    ],
+  }[programType ?? 0];
+
+  if (modalityMetrics) {
+    return [modalityMetrics[0], walletMetric, ...modalityMetrics.slice(1)];
+  }
+
+  return [
+    walletMetric,
+    {
+      label: "Operaciones",
+      value: card.transactionCount,
+      detail: card.transactionCount === 1 ? "operación" : "operaciones",
+    },
+    {
+      label: "Activación",
+      value: formatDateOnly(card.activatedAt, {}, "Sin fecha"),
+      detail: "fecha registrada",
+    },
+    {
+      label: "Última actividad",
+      value: formatDateOnly(card.lastActivityAt, {}, "Sin actividad"),
+      detail: "actividad registrada",
+    },
+  ];
 }
 
 export default function CustomerDetailPage() {
@@ -97,6 +185,8 @@ export default function CustomerDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusConfirmationOpen, setStatusConfirmationOpen] = useState(false);
   const [copiedCardId, setCopiedCardId] = useState<string | null>(null);
+  const [programTypes, setProgramTypes] = useState<Record<string, number>>({});
+  const [recoveryDialogOpen, setRecoveryDialogOpen] = useState(false);
   const [recoveryCard, setRecoveryCard] = useState<CustomerCard | null>(null);
   const [recoveryLinkCopied, setRecoveryLinkCopied] = useState(false);
   const recoveryUrl = recoveryCard?.qrToken
@@ -110,13 +200,15 @@ export default function CustomerDetailPage() {
     setError("");
 
     try {
-      const response = await fetch(`/api/customers/${customerId}`, {
-        cache: "no-store",
-      });
+      const [response, programsResponse] = await Promise.all([
+        fetch(`/api/customers/${customerId}`, { cache: "no-store" }),
+        fetch("/api/programs", { cache: "no-store" }),
+      ]);
 
       const payload = (await response.json()) as CustomerResponse;
+      const programsPayload = (await programsResponse.json()) as ProgramsResponse;
 
-      if (response.status === 401) {
+      if (response.status === 401 || programsResponse.status === 401) {
         router.replace("/login");
         return;
       }
@@ -130,7 +222,21 @@ export default function CustomerDetailPage() {
         throw new Error(payload.message ?? "No fue posible cargar al cliente.");
       }
 
+      if (!programsResponse.ok) {
+        throw new Error(
+          programsPayload.message ?? "No fue posible cargar las modalidades.",
+        );
+      }
+
       setCustomer(payload.data);
+      setProgramTypes(
+        Object.fromEntries(
+          (programsPayload.data ?? []).map((program) => [
+            program.id,
+            program.programType,
+          ]),
+        ),
+      );
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -143,19 +249,15 @@ export default function CustomerDetailPage() {
   }, [customerId, router]);
 
   useEffect(() => {
-    void loadCustomer();
+    const timeout = window.setTimeout(() => void loadCustomer(), 0);
+    return () => window.clearTimeout(timeout);
   }, [loadCustomer]);
 
   useEffect(() => {
-    if (!recoveryCard && !statusConfirmationOpen) return;
+    if (!statusConfirmationOpen) return;
 
     function closeWithEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-
-      if (recoveryCard) {
-        setRecoveryCard(null);
-        setRecoveryLinkCopied(false);
-      }
 
       if (statusConfirmationOpen) {
         setStatusConfirmationOpen(false);
@@ -170,7 +272,7 @@ export default function CustomerDetailPage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeWithEscape);
     };
-  }, [recoveryCard, statusConfirmationOpen]);
+  }, [statusConfirmationOpen]);
 
   async function updateStatus() {
     if (!customer) return;
@@ -257,11 +359,36 @@ export default function CustomerDetailPage() {
 
     setRecoveryLinkCopied(false);
     setRecoveryCard(card);
+    setRecoveryDialogOpen(true);
   }
 
-  function closeRecoveryModal() {
+  function startRecovery() {
+    const recoverableCards = customer?.cards.filter((card) => card.qrToken) ?? [];
+
+    if (recoverableCards.length === 0) {
+      toast.error("Recuperación no disponible", {
+        description: "Este cliente no tiene tarjetas con enlace de recuperación.",
+      });
+      return;
+    }
+
+    if (recoverableCards.length === 1) {
+      openRecoveryModal(recoverableCards[0]);
+      return;
+    }
+
     setRecoveryCard(null);
     setRecoveryLinkCopied(false);
+    setRecoveryDialogOpen(true);
+  }
+
+  function handleRecoveryDialogOpenChange(open: boolean) {
+    setRecoveryDialogOpen(open);
+
+    if (!open) {
+      setRecoveryCard(null);
+      setRecoveryLinkCopied(false);
+    }
   }
 
   async function copyRecoveryLink() {
@@ -311,6 +438,7 @@ export default function CustomerDetailPage() {
     )[0] ??
   customer.lastVisitAt ??
   null;
+  const recoverableCards = customer.cards.filter((card) => card.qrToken);
 
   return (
     <main className={styles.page}>
@@ -375,16 +503,8 @@ export default function CustomerDetailPage() {
           <button
             type="button"
             className={styles.primaryButton}
-            disabled={customer.cards.length === 0}
-            onClick={() => {
-              const cardToRecover =
-                customer.cards.find((card) => card.status === 1) ??
-                customer.cards[0];
-
-              if (cardToRecover) {
-                openRecoveryModal(cardToRecover);
-              }
-            }}
+            disabled={recoverableCards.length === 0}
+            onClick={startRecovery}
           >
             <QrCode size={19} />
             Recuperar tarjeta
@@ -401,52 +521,6 @@ export default function CustomerDetailPage() {
           </button>
         </div>
       )}
-
-      <section className={styles.metrics}>
-        <article>
-          <span className={`${styles.metricIcon} ${styles.coral}`}>
-            <CreditCard size={21} />
-          </span>
-
-          <div>
-            <small>Tarjetas activas</small>
-            <strong>{customer.summary.activeCardCount}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.mint}`}>
-            <Stamp size={21} />
-          </span>
-
-          <div>
-            <small>Saldo disponible</small>
-            <strong>{customer.summary.totalBalance}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.lilac}`}>
-            <WalletCards size={21} />
-          </span>
-
-          <div>
-            <small>Sellos acumulados</small>
-            <strong>{customer.summary.lifetimeEarned}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.sun}`}>
-            <Gift size={21} />
-          </span>
-
-          <div>
-            <small>Sellos canjeados</small>
-            <strong>{customer.summary.lifetimeRedeemed}</strong>
-          </div>
-        </article>
-      </section>
 
       <section className={styles.detailLayout}>
         <aside className={styles.informationCard}>
@@ -538,7 +612,7 @@ export default function CustomerDetailPage() {
           <div className={styles.sectionHeading}>
             <div>
               <span className={styles.eyebrow}>PROGRAMAS</span>
-              <h2>Tarjetas de lealtad</h2>
+              <h2>Programas del cliente</h2>
             </div>
 
             <span className={styles.cardCount}>{customer.cards.length}</span>
@@ -556,7 +630,11 @@ export default function CustomerDetailPage() {
             </div>
           ) : (
             <div className={styles.loyaltyCards}>
-              {customer.cards.map((card) => (
+              {customer.cards.map((card) => {
+                const programType = programTypes[card.programId];
+                const metrics = getCardMetrics(card, programType);
+
+                return (
                 <article className={styles.loyaltyCard} key={card.id}>
                   <div className={styles.loyaltyHeader}>
                     <div className={styles.programIdentity}>
@@ -566,6 +644,10 @@ export default function CustomerDetailPage() {
 
                       <div>
                         <h3>{card.programName}</h3>
+
+                        <span className={styles.programType}>
+                          {getProgramTypeLabel(programType)}
+                        </span>
 
                         <button
                           type="button"
@@ -595,45 +677,37 @@ export default function CustomerDetailPage() {
                   </div>
 
                   <div className={styles.cardHighlights}>
-                    <div className={styles.balanceHighlight}>
-                      <small>Saldo disponible</small>
-                      <strong>{card.balance}</strong>
-                      <span>sellos</span>
-                    </div>
-
-                    <div>
-                      <small>Wallet</small>
-                      <strong>
-                        {card.walletPassCount > 0
-                          ? "Instalada"
-                          : "No instalada"}
-                      </strong>
-                      <span>
-                        {card.walletPassCount}{" "}
-                        {card.walletPassCount === 1 ? "pase" : "pases"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <small>Acumulados</small>
-                      <strong>{card.lifetimeEarned}</strong>
-                      <span>sellos históricos</span>
-                    </div>
-
-                    <div>
-                      <small>Canjeados</small>
-                      <strong>{card.lifetimeRedeemed}</strong>
-                      <span>sellos utilizados</span>
-                    </div>
+                    {metrics.map((metric) => (
+                      <div
+                        className={metric.emphasized ? styles.balanceHighlight : undefined}
+                        key={metric.label}
+                      >
+                        <small>{metric.label}</small>
+                        <strong>{metric.value}</strong>
+                        <span>{metric.detail}</span>
+                      </div>
+                    ))}
                   </div>
 
             
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
       </section>
+
+      {subscriptionsEnabled && (
+        <CustomerMemberships
+          customerId={customer.id}
+          customerName={customer.fullName}
+          cards={customer.cards.map((card) => ({
+            id: card.id,
+            qrToken: card.qrToken,
+          }))}
+        />
+      )}
 
       {statusConfirmationOpen && (
         <div
@@ -712,21 +786,14 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      {recoveryCard && recoveryUrl && (
-        <div
-          className={styles.modalBackdrop}
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeRecoveryModal();
-            }
-          }}
-        >
-          <section
-            className={styles.recoveryModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="recovery-modal-title"
+      <Dialog.Root
+        open={recoveryDialogOpen}
+        onOpenChange={handleRecoveryDialogOpenChange}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className={styles.modalBackdrop} />
+          <Dialog.Popup
+            className={`${styles.recoveryModal} ${styles.dialogPopup}`}
           >
             <div className={styles.recoveryHeading}>
               <span className={styles.recoveryIcon}>
@@ -735,69 +802,114 @@ export default function CustomerDetailPage() {
 
               <div>
                 <span className={styles.eyebrow}>RECUPERAR TARJETA</span>
-
-                <h2 id="recovery-modal-title">{recoveryCard.programName}</h2>
+                <Dialog.Title>
+                  {recoveryCard ? recoveryCard.programName : "Selecciona un programa"}
+                </Dialog.Title>
               </div>
 
-              <button
-                type="button"
-                className={styles.modalClose}
-                onClick={closeRecoveryModal}
-                aria-label="Cerrar"
-              >
+              <Dialog.Close className={styles.modalClose} aria-label="Cerrar">
                 <X size={19} />
-              </button>
+              </Dialog.Close>
             </div>
 
-            <p>
-              El cliente puede escanear este código para instalar nuevamente su
-              misma tarjeta sin perder sellos ni recompensas.
-            </p>
+            {recoveryCard && recoveryUrl ? (
+              <>
+                <Dialog.Description>
+                  El cliente puede escanear este código para instalar nuevamente su
+                  misma tarjeta, sin crear otra ni perder sus datos.
+                </Dialog.Description>
 
-            <div className={styles.recoveryQr}>
-              <QRCodeSVG
-                value={recoveryUrl}
-                size={210}
-                level="H"
-                marginSize={2}
-                bgColor="#ffffff"
-                fgColor="#111827"
-                title={`Recuperar ${recoveryCard.programName}`}
-              />
-            </div>
+                <div className={styles.recoveryQr}>
+                  <QRCodeSVG
+                    value={recoveryUrl}
+                    size={210}
+                    level="H"
+                    marginSize={2}
+                    bgColor="#ffffff"
+                    fgColor="#111827"
+                    title={`Recuperar ${recoveryCard.programName}`}
+                  />
+                </div>
 
-            <div className={styles.recoverySummary}>
-              <span>{recoveryCard.cardNumber}</span>
-              <strong>{recoveryCard.balance} sellos</strong>
-            </div>
+                <div className={styles.recoverySummary}>
+                  <span>{recoveryCard.cardNumber}</span>
+                  <strong>
+                    {getProgramTypeLabel(programTypes[recoveryCard.programId])}
+                    {" · "}
+                    {getCardStatusLabel(recoveryCard.status)}
+                  </strong>
+                </div>
 
-            <div className={styles.recoveryUrl}>
-              <span>{recoveryUrl}</span>
+                <div className={styles.recoveryUrl}>
+                  <span>{recoveryUrl}</span>
 
-              <button
-                type="button"
-                onClick={() => void copyRecoveryLink()}
-                aria-label="Copiar enlace"
-              >
-                {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => void copyRecoveryLink()}
+                    aria-label="Copiar enlace"
+                  >
+                    {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
+                  </button>
+                </div>
 
-            <div className={styles.recoveryActions}>
-              <button type="button" onClick={() => void copyRecoveryLink()}>
-                {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
+                <div className={styles.recoveryActions}>
+                  <button type="button" onClick={() => void copyRecoveryLink()}>
+                    {recoveryLinkCopied ? <Check size={17} /> : <Link2 size={17} />}
 
-                {recoveryLinkCopied ? "Enlace copiado" : "Copiar enlace"}
-              </button>
+                    {recoveryLinkCopied ? "Enlace copiado" : "Copiar enlace"}
+                  </button>
 
-              <a href={recoveryUrl} target="_blank" rel="noreferrer">
-                <ExternalLink size={17} />
-                Abrir página
-              </a>
-            </div>
-          </section>
-        </div>
-      )}
+                  <a href={recoveryUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink size={17} />
+                    Abrir página
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                <Dialog.Description className={styles.selectorDescription}>
+                  Elige la tarjeta existente que deseas recuperar para {customer.fullName}.
+                </Dialog.Description>
+
+                <div className={styles.recoveryOptions}>
+                  {recoverableCards.map((card) => {
+                    const programType = programTypes[card.programId];
+
+                    return (
+                      <button
+                        type="button"
+                        data-loyalty-card-id={card.id}
+                        key={card.id}
+                        onClick={() => openRecoveryModal(card)}
+                      >
+                        <span className={styles.optionIcon}>
+                          <CreditCard size={19} />
+                        </span>
+
+                        <span className={styles.optionIdentity}>
+                          <strong>{card.programName}</strong>
+                          <small>{getProgramTypeLabel(programType)}</small>
+                        </span>
+
+                        <span
+                          className={
+                            card.status === 1
+                              ? styles.activeBadge
+                              : styles.inactiveBadge
+                          }
+                        >
+                          <i />
+                          {getCardStatusLabel(card.status)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
 
     </main>
   );

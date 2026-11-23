@@ -19,7 +19,8 @@ Referencia compacta de la estructura real del frontend Next.js (App Router). Las
 | `/dashboard/clientes/[customerId]` | Detalle y tarjetas de un cliente | `app/dashboard/clientes/[customerId]/page.tsx` |
 | `/dashboard/tarjeta` | Listado y eliminación de programas | `app/dashboard/tarjeta/page.tsx` |
 | `/dashboard/tarjeta/[programId]` | Alta (`programId = new`) y edición de programa/tarjeta | `app/dashboard/tarjeta/[programId]/page.tsx` |
-| `/dashboard/gift-cards` | Estadísticas, venta, consulta, enlaces e historial y recordatorios de Gift Cards | `app/dashboard/gift-cards/page.tsx` |
+| `/dashboard/tarjeta/[programId]/vender` | Compatibilidad: redirige a la venta integrada en el editor | `app/dashboard/tarjeta/[programId]/vender/page.tsx` |
+| `/dashboard/gift-cards` | Compatibilidad: redirige la ruta anterior a Mi tarjeta | `app/dashboard/gift-cards/page.tsx` |
 | `/dashboard/equipo` | Integrantes, roles y sucursales asignadas | `app/dashboard/equipo/page.tsx` |
 | `/dashboard/ubicaciones` | CRUD y estado de sucursales | `app/dashboard/ubicaciones/page.tsx` |
 | `/dashboard/estadisticas` | Métricas por periodo, programa, empleado y sucursal | `app/dashboard/estadisticas/page.tsx` |
@@ -40,6 +41,7 @@ Estructura raíz: `app/layout.tsx` carga fuente, `app/globals.css` y `Toaster`; 
 | Marketing | `components/marketing/geo-push-panel.tsx` | Lectura y edición GeoPush por programa |
 | Ubicaciones | `components/locations/google-place-picker.tsx` | Selector de Google Maps cargado dinámicamente |
 | UI | `components/ui/{alert,alert-dialog,avatar,button,card,dropdown-menu,input,label,sheet,sonner,tooltip}.tsx` | Primitivas compartidas (Base UI/shadcn y Sonner) |
+| Confirmaciones | `components/ui/fidara-confirm-dialog.tsx` | Modal oficial para decisiones destructivas, financieras o bloqueantes |
 
 La navegación del panel está declarada en `components/dashboard/app-sidebar.tsx`; encabezado, perfil, branding y cierre de sesión están en `components/dashboard/app-header.tsx`. Las páginas y componentes con datos mantienen estados locales de carga/error; no hay una capa global de estado.
 
@@ -96,7 +98,7 @@ No existe una carpeta global de tipos. Los contratos están colocados junto a ca
 - Wallet/programas: contratos de tarjeta, recompensas, formulario e imágenes en `app/dashboard/escanear/page.tsx` y `app/dashboard/tarjeta/**/page.tsx`.
 - Clientes, ubicaciones, equipo, perfil, branding y notificaciones: tipos locales en sus respectivos `page.tsx`.
 - Contratos compartidos exportados: `DateTimePreferences` en `components/lib/date-time.ts` y `GooglePlaceSelection` en `components/locations/google-place-picker.tsx`.
-- Gift Cards: contratos locales de configuración en el editor de programas, venta/reportes en `app/dashboard/gift-cards/page.tsx` y canje en `app/dashboard/escanear/page.tsx`; el proxy autenticado compartido está en `lib/gift-card-bff.ts`.
+- Gift Cards: tipo de programa 5. Configuración y venta en `app/dashboard/tarjeta/`; consulta, historial y canje de tarjetas existentes en `app/dashboard/escanear/page.tsx`; métricas y vencimientos en `app/dashboard/estadisticas/page.tsx`. El proxy autenticado compartido está en `lib/gift-card-bff.ts`.
 - Los route handlers dinámicos declaran `RouteContext` localmente. Las respuestas cliente suelen envolverse en tipos locales `ApiResponse<T>` o `ApiEnvelope<T>`.
 
 Antes de cambiar un contrato, verificar el tipo local y el handler `/api/*` correspondiente; no hay un cliente API ni esquemas generados centralizados.

@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CreditCard,
-  Gift,
   Home,
   MapPin,
   PanelLeftClose,
@@ -54,11 +53,6 @@ const navigation = [
     label: "Mi tarjeta",
     href: "/dashboard/tarjeta",
     icon: CreditCard,
-  },
-  {
-    label: "Gift Cards",
-    href: "/dashboard/gift-cards",
-    icon: Gift,
   },
   {
     label: "Equipo",

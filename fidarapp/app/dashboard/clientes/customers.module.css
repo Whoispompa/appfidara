@@ -45,6 +45,13 @@
   line-height: 1.55;
 }
 
+.headingActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
 .primaryButton {
   display: inline-flex;
   min-height: 46px;
@@ -72,9 +79,56 @@
   box-shadow: 0 16px 32px rgba(225, 29, 72, 0.28);
 }
 
+.secondaryButton {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 18px;
+  border: 1px solid #217346;
+  border-radius: 14px;
+  background: #217346;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease,
+    transform 160ms ease;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: #185c37;
+  background: #185c37;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.secondaryButton:focus-visible {
+  outline: 3px solid rgba(225, 29, 72, 0.16);
+  outline-offset: 2px;
+}
+
+.secondaryButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.buttonSpinner {
+  animation: customers-spin 0.8s linear infinite;
+}
+
+@keyframes customers-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 320px);
   gap: 14px;
 }
 
@@ -288,12 +342,10 @@
 .customerRow {
   display: grid;
   grid-template-columns:
-    minmax(235px, 1.25fr)
-    minmax(135px, 0.6fr)
-    minmax(120px, 0.5fr)
-    minmax(170px, 0.72fr)
-    minmax(90px, 0.36fr)
-    90px;
+    minmax(260px, 1.4fr)
+    minmax(135px, 0.55fr)
+    minmax(150px, 0.62fr)
+    minmax(170px, 0.72fr);
   align-items: center;
   gap: 18px;
 }
@@ -390,14 +442,13 @@
 }
 
 .customerCards,
-.customerBalance,
-.customerActivity,
-.customerState {
+.customerBirthday,
+.customerActivity {
   min-width: 0;
 }
 
 .customerCards > small,
-.customerBalance > small,
+.customerBirthday > small,
 .customerActivity > small {
   display: none;
   margin-bottom: 7px;
@@ -409,7 +460,7 @@
 }
 
 .customerCards > div,
-.customerBalance > div {
+.customerBirthday > div {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -417,7 +468,7 @@
 }
 
 .customerCards strong,
-.customerBalance strong,
+.customerBirthday strong,
 .customerActivity strong {
   overflow: hidden;
   color: var(--fidara-dark);
@@ -428,7 +479,7 @@
 }
 
 .customerCards > span,
-.customerBalance > span,
+.customerBirthday > span,
 .customerActivity > span {
   display: block;
   overflow: hidden;
@@ -833,7 +884,7 @@
 /* iPad Pro y pantallas medianas */
 @media (max-width: 1180px) {
   .metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 320px);
   }
 
   .listHeader {
@@ -841,7 +892,7 @@
   }
 
   .customerRow {
-    grid-template-columns: minmax(260px, 1.25fr) minmax(145px, 0.6fr) auto;
+    grid-template-columns: minmax(0, 1.25fr) minmax(170px, 0.75fr);
     gap: 18px 16px;
     padding: 20px;
   }
@@ -851,35 +902,25 @@
     grid-row: 1;
   }
 
-  .customerState {
+  .customerCards {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .rowActions {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .customerCards {
+  .customerBirthday {
     grid-column: 1;
     grid-row: 2;
     padding-left: 61px;
   }
 
-  .customerBalance {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   .customerActivity {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 2;
     min-width: 165px;
   }
 
   .customerCards > small,
-  .customerBalance > small,
+  .customerBirthday > small,
   .customerActivity > small {
     display: block;
   }
@@ -921,7 +962,7 @@
   }
 
   .customerRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.75fr);
     gap: 17px 14px;
   }
 
@@ -930,32 +971,20 @@
     grid-row: 1;
   }
 
-  .customerState {
+  .customerCards {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .customerCards {
+  .customerBirthday {
     grid-column: 1;
     grid-row: 2;
     padding-left: 61px;
-  }
-
-  .customerBalance {
-    grid-column: 2;
-    grid-row: 2;
-    min-width: 130px;
   }
 
   .customerActivity {
-    grid-column: 1;
-    grid-row: 3;
-    padding-left: 61px;
-  }
-
-  .rowActions {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 2;
   }
 }
 
@@ -965,7 +994,13 @@
     flex-direction: column;
   }
 
-  .primaryButton {
+  .headingActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .primaryButton,
+  .secondaryButton {
     width: 100%;
   }
 
@@ -981,9 +1016,8 @@
   }
 
   .customerCards,
-  .customerBalance,
+  .customerBirthday,
   .customerActivity,
-  .customerState,
   .rowActions {
     width: 100%;
     min-width: 0;
@@ -991,15 +1025,10 @@
   }
 
   .customerCards,
-  .customerBalance,
+  .customerBirthday,
   .customerActivity {
     padding-top: 14px;
     border-top: 1px solid var(--fidara-border);
-  }
-
-  .customerState {
-    display: flex;
-    justify-content: flex-start;
   }
 
   .rowActions {

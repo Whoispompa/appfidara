@@ -3,6 +3,10 @@
 
 
 import { formatShortDateTime } from "@/components/lib/date-time";
+import {
+  complementaryPaymentMethodLabel,
+  type GiftCardComplementaryPaymentStatus,
+} from "@/lib/gift-card-complementary-payment";
 
 
 
@@ -64,6 +68,10 @@ type MovementType =
 
   | "RewardRedeemed"
 
+  | "GiftCardSale"
+
+  | "GiftCardRedeemed"
+
   | "Unknown";
 
 
@@ -86,6 +94,8 @@ type RecentTransaction = {
 
   rewardName?: string | null;
 
+  recipientName: string | null;
+
   amount: number;
 
   grossPurchaseAmount: number;
@@ -97,6 +107,30 @@ type RecentTransaction = {
   cashbackGenerated: number;
 
   discountApplied: number;
+
+  chargedAmount: number | null;
+
+  purchaseAmount: number | null;
+
+  giftCardAppliedAmount: number | null;
+
+  remainingToPay: number | null;
+
+  remainingBalance: number | null;
+
+  complementaryPaymentStatus?: GiftCardComplementaryPaymentStatus | null;
+
+  complementaryPaymentMethod?: number | null;
+
+  complementaryPaymentReference?: string | null;
+
+  complementaryPaymentDueAmount?: number | null;
+
+  complementaryPaymentCollectedAmount?: number | null;
+
+  complementaryPaymentPendingAmount?: number | null;
+
+  complementaryPaymentUnverifiedAmount?: number | null;
 
   balanceBefore: number;
 
@@ -243,6 +277,14 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2,
 
   }).format(value);
+
+}
+
+
+
+function formatNullableCurrency(value: number | null) {
+
+  return value === null ? "—" : formatCurrency(value);
 
 }
 
@@ -413,6 +455,42 @@ function getMovementPresentation(movement: RecentTransaction): {
         icon: Gift,
 
         iconClassName: "bg-violet-50 text-violet-700",
+
+      };
+
+
+
+    case "GiftCardSale":
+
+      return {
+
+        title: "Gift Card vendida",
+
+        description: movement.programName,
+
+        value: formatNullableCurrency(movement.chargedAmount),
+
+        icon: Gift,
+
+        iconClassName: "bg-violet-50 text-violet-700",
+
+      };
+
+
+
+    case "GiftCardRedeemed":
+
+      return {
+
+        title: "Gift Card canjeada",
+
+        description: movement.programName,
+
+        value: formatNullableCurrency(movement.purchaseAmount),
+
+        icon: WalletCards,
+
+        iconClassName: "bg-rose-50 text-[#E11D48]",
 
       };
 
@@ -1594,6 +1672,22 @@ function MovementRow({ movement }: { movement: RecentTransaction }) {
 
   const isCouponRedemption = movement.type === "CouponRedeemed";
 
+  const isGiftCardRedemption = movement.type === "GiftCardRedeemed";
+
+  const complementaryMethod = complementaryPaymentMethodLabel(
+
+    movement.complementaryPaymentMethod,
+
+  );
+
+  const displayName =
+
+    movement.type === "GiftCardSale" || isGiftCardRedemption
+
+      ? movement.recipientName ?? movement.customerName
+
+      : movement.customerName;
+
 
 
   return (
@@ -1620,7 +1714,7 @@ function MovementRow({ movement }: { movement: RecentTransaction }) {
 
             <strong className="truncate text-sm font-extrabold text-black">
 
-              {movement.customerName}
+              {displayName}
 
             </strong>
 
@@ -1725,6 +1819,86 @@ function MovementRow({ movement }: { movement: RecentTransaction }) {
 	            </div>
 
 	          )}
+
+
+
+          {isGiftCardRedemption && (
+
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold">
+
+              <span className="text-violet-700">
+
+                Aplicado{" "}
+
+                {formatNullableCurrency(movement.giftCardAppliedAmount)}
+
+              </span>
+
+
+
+              {movement.complementaryPaymentStatus === 2 ? (
+
+                <span className="text-emerald-700">
+
+                  Cobro complementario confirmado{" "}
+
+                  {formatNullableCurrency(
+
+                    movement.complementaryPaymentCollectedAmount ?? null,
+
+                  )}
+
+                  {complementaryMethod ? ` · ${complementaryMethod}` : ""}
+
+                  {movement.complementaryPaymentReference
+
+                    ? ` · Ref. ${movement.complementaryPaymentReference}`
+
+                    : ""}
+
+                </span>
+
+              ) : movement.complementaryPaymentStatus === 1 ? (
+
+                <span className="text-[#6B7280]">
+
+                  Cobro complementario no requerido
+
+                </span>
+
+              ) : movement.complementaryPaymentStatus === 0 ? (
+
+                <span className="text-amber-700">
+
+                  Cobro complementario no verificado{" "}
+
+                  {formatNullableCurrency(
+
+                    movement.complementaryPaymentUnverifiedAmount ?? null,
+
+                  )}
+
+                </span>
+
+              ) : (
+
+                <span className="text-[#6B7280]">
+
+                  Diferencia{" "}
+
+                  <strong className="text-black">
+
+                    {formatNullableCurrency(movement.remainingToPay)}
+
+                  </strong>
+
+                </span>
+
+              )}
+
+            </div>
+
+          )}
 
         </div>
 

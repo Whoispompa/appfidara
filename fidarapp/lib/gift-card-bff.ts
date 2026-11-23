@@ -11,6 +11,9 @@ const apiUrl = (process.env.FIDARA_API_URL ?? "https://api.fidara.mx").replace(
 type ProxyOptions = {
   method?: "GET" | "POST";
   requireLocation?: boolean;
+  validateBody?: (
+    body: Record<string, unknown>,
+  ) => { message: string; code?: string } | null;
 };
 
 function errorResponse(status: number, message: string, code?: string) {
@@ -48,6 +51,14 @@ export async function proxyGiftCardRequest(
 
     if (method === "POST") {
       const requestBody = (await request.json()) as Record<string, unknown>;
+      const validationError = options.validateBody?.(requestBody);
+      if (validationError) {
+        return errorResponse(
+          400,
+          validationError.message,
+          validationError.code,
+        );
+      }
       body = JSON.stringify(
         options.requireLocation ? { ...requestBody, locationId } : requestBody,
       );

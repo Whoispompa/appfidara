@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  Apple,
   BadgePercent,
   ArrowDown,
   ArrowUp,
@@ -27,7 +28,6 @@ import {
   Ticket,
   Trash2,
   Upload,
-  Users,
   X,
 } from "lucide-react";
 
@@ -36,7 +36,27 @@ import { Copy, ExternalLink, FileDown } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { WalletCardPreview } from "@/components/dashboard/wallet-card-preview";
+import { GiftCardSalePanel } from "@/components/gift-cards/gift-card-sale-panel";
+import { SubscriptionProgramPanel } from "@/components/subscriptions/subscription-program-panel";
+import {
+  isValidSubscriptionProgramId,
+  subscriptionsEnabled,
+} from "@/lib/subscriptions";
 import { toast } from "sonner";
+
+function AndroidWalletIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M7.2 6.35 5.85 4.02a.55.55 0 0 1 .2-.75.55.55 0 0 1 .75.2l1.38 2.38A8.2 8.2 0 0 1 12 4.9c1.38 0 2.68.34 3.82.95l1.38-2.38a.55.55 0 1 1 .95.55L16.8 6.35A7.45 7.45 0 0 1 19.45 12H4.55A7.45 7.45 0 0 1 7.2 6.35ZM8.25 9.1a.85.85 0 1 0 0-1.7.85.85 0 0 0 0 1.7Zm7.5 0a.85.85 0 1 0 0-1.7.85.85 0 0 0 0 1.7ZM4.55 13.1h14.9v6.25c0 .91-.74 1.65-1.65 1.65h-1.15v1.35a1.1 1.1 0 0 1-2.2 0V21h-4.9v1.35a1.1 1.1 0 0 1-2.2 0V21H6.2c-.91 0-1.65-.74-1.65-1.65V13.1Z" />
+    </svg>
+  );
+}
 
 type RewardInformation = {
   id: string;
@@ -215,10 +235,10 @@ const initialForm: ProgramForm = {
     displayOrder,
   })),
   isRecurring: true,
-  cardBackgroundColor: "#1b6726",
-  cardForegroundColor: "#ffffff",
-  cardLabelColor: "#f5f1e8",
-  cardStripColor: "#14532d",
+  cardBackgroundColor: "#FFFFFF",
+  cardForegroundColor: "#111827",
+  cardLabelColor: "#111827",
+  cardStripColor: "#FFFFFF",
   stripDesignMode: "color",
   showPoweredByFidara: true,
   rewardName: "",
@@ -268,11 +288,11 @@ const emptyProgram: ProgramInformation = {
   cardLogoUrl: null,
   activeStampImageUrl: null,
   inactiveStampImageUrl: null,
-  cardBackgroundColor: "#1b6726",
-  cardForegroundColor: "#ffffff",
-  cardLabelColor: "#f5f1e8",
+  cardBackgroundColor: "#FFFFFF",
+  cardForegroundColor: "#111827",
+  cardLabelColor: "#111827",
   cardStripImageUrl: null,
-  cardStripColor: "#14532d",
+  cardStripColor: "#FFFFFF",
   showPoweredByFidara: true,
 
   reward: {
@@ -293,10 +313,13 @@ export default function CardEditorPage() {
   }>();
 
   const [linkCopied, setLinkCopied] = useState(false);
+  const [walletPreviewPlatform, setWalletPreviewPlatform] = useState<
+    "apple" | "google"
+  >("apple");
 
   const programId = params.programId;
 
-  const isNewProgram = programId === "nueva";
+  const isNewProgram = programId === "nueva" || programId === "new";
 
   const [programTypeSelected, setProgramTypeSelected] = useState(!isNewProgram);
 
@@ -321,7 +344,10 @@ export default function CardEditorPage() {
   });
 
   const joinUrl =
-    program?.id && program.organizationSlug
+    program?.programType !== 5 &&
+    program?.programType !== 6 &&
+    program?.id &&
+    program.organizationSlug
       ? `https://get.fidara.mx/join/${program.organizationSlug}?programId=${program.id}`
       : "";
 
@@ -336,6 +362,26 @@ export default function CardEditorPage() {
   const isCashbackProgram = form.programType === 3;
   const isCouponProgram = form.programType === 4;
   const isGiftCardProgram = form.programType === 5;
+  const isSubscriptionProgram = form.programType === 6;
+  const programTypeLabel = isStampProgram
+    ? "Sellos"
+    : isPointsProgram
+      ? "Puntos"
+      : isCashbackProgram
+        ? "Cashback"
+        : isCouponProgram
+          ? "Cupones"
+          : isSubscriptionProgram
+            ? "Suscripción"
+            : "Tarjeta de regalo";
+  const editorTitle = isNewProgram
+    ? `Crear programa de ${programTypeLabel.toLocaleLowerCase("es-MX")}`
+    : `Editar programa "${form.name.trim() || program?.name?.trim() || "Sin nombre"}"`;
+  const savedSubscriptionProgramId = isValidSubscriptionProgramId(program?.id)
+    ? program.id
+    : !isNewProgram && isValidSubscriptionProgramId(programId)
+      ? programId
+      : null;
 
   const usesTraditionalReward = isStampProgram || isPointsProgram;
 
@@ -453,16 +499,11 @@ export default function CardEditorPage() {
 
         giftCardValidityDays: String(data.giftCardValidityDays ?? 365),
 
-        giftCardPresetAmounts:
-          data.giftCardPresetAmounts?.length
-            ? [...data.giftCardPresetAmounts].sort(
-                (left, right) => left.displayOrder - right.displayOrder,
-              )
-            : [200, 500, 1000].map((amount, displayOrder) => ({
-                amount,
-                isActive: true,
-                displayOrder,
-              })),
+        giftCardPresetAmounts: Array.isArray(data.giftCardPresetAmounts)
+          ? [...data.giftCardPresetAmounts].sort(
+              (left, right) => left.displayOrder - right.displayOrder,
+            )
+          : [],
 
         isRecurring: data.isRecurring,
 
@@ -524,7 +565,7 @@ export default function CardEditorPage() {
 
   }
 
-  function selectProgramType(programType: 1 | 2 | 3 | 4 | 5) {
+  function selectProgramType(programType: 1 | 2 | 3 | 4 | 5 | 6) {
     setForm((current) => ({
       ...current,
 
@@ -581,7 +622,8 @@ export default function CardEditorPage() {
 
       couponTerms: programType === 4 ? current.couponTerms : "",
 
-      isRecurring: programType === 5 ? false : current.isRecurring,
+      isRecurring:
+        programType === 5 || programType === 6 ? false : current.isRecurring,
     }));
 
     setProgramTypeSelected(true);
@@ -1245,12 +1287,25 @@ export default function CardEditorPage() {
       }
 
       if (isNewProgram) {
-        const createdProgramId = payload.data?.id ?? payload.programId;
+        const createdProgram: ProgramInformation | undefined = payload.data;
+        const createdProgramId = createdProgram?.id ?? payload.programId;
 
-        if (!createdProgramId) {
+        if (
+          !createdProgramId ||
+          (isSubscriptionProgram &&
+            !isValidSubscriptionProgramId(createdProgramId))
+        ) {
           throw new Error(
             "La API creó la tarjeta, pero no devolvió su identificador.",
           );
+        }
+
+        if (
+          isSubscriptionProgram &&
+          createdProgram &&
+          createdProgram.id === createdProgramId
+        ) {
+          setProgram(createdProgram);
         }
 
         router.replace(`/dashboard/tarjeta/${createdProgramId}`);
@@ -1262,6 +1317,30 @@ export default function CardEditorPage() {
       const updated: ProgramInformation = payload.data;
 
       setProgram(updated);
+
+      if (Number(updated.programType) === 5) {
+        setForm((current) => ({
+          ...current,
+          giftCardAllowCustomAmount:
+            updated.giftCardAllowCustomAmount ?? current.giftCardAllowCustomAmount,
+          giftCardCustomMinAmount: String(
+            updated.giftCardCustomMinAmount ?? current.giftCardCustomMinAmount,
+          ),
+          giftCardCustomMaxAmount: String(
+            updated.giftCardCustomMaxAmount ?? current.giftCardCustomMaxAmount,
+          ),
+          giftCardExpirationEnabled:
+            updated.giftCardExpirationEnabled ?? current.giftCardExpirationEnabled,
+          giftCardValidityDays: String(
+            updated.giftCardValidityDays ?? current.giftCardValidityDays,
+          ),
+          giftCardPresetAmounts: Array.isArray(updated.giftCardPresetAmounts)
+            ? [...updated.giftCardPresetAmounts].sort(
+                (left, right) => left.displayOrder - right.displayOrder,
+              )
+            : current.giftCardPresetAmounts,
+        }));
+      }
 
       setPreviews({
         logo: absoluteUrl(updated.cardLogoUrl),
@@ -1343,7 +1422,8 @@ export default function CardEditorPage() {
             <div className="card-type-catalog">
               <button
                 type="button"
-                className="card-type-option available"
+                className={`card-type-option available ${form.programType === 1 ? "selected" : ""}`}
+                aria-pressed={form.programType === 1}
                 onClick={() => selectProgramType(1)}
               >
                 <span className="card-type-icon">
@@ -1355,12 +1435,12 @@ export default function CardEditorPage() {
                     Premia compras o visitas con una tarjeta visual.
                   </small>
                 </span>
-                <span className="card-type-status available">Disponible</span>
               </button>
 
               <button
                 type="button"
-                className="card-type-option available"
+                className={`card-type-option available ${form.programType === 2 ? "selected" : ""}`}
+                aria-pressed={form.programType === 2}
                 onClick={() => selectProgramType(2)}
               >
                 <span className="card-type-icon">
@@ -1370,57 +1450,12 @@ export default function CardEditorPage() {
                   <strong>Puntos</strong>
                   <small>Acumula puntos por gasto o por cada visita.</small>
                 </span>
-                <span className="card-type-status available">Disponible</span>
               </button>
 
               <button
                 type="button"
-                className="card-type-option upcoming"
-                disabled
-              >
-                <span className="card-type-icon">
-                  <Gift size={25} />
-                </span>
-                <span className="card-type-copy">
-                  <strong>Premios</strong>
-                  <small>Entrega productos o beneficios sin acumulación.</small>
-                </span>
-                <span className="card-type-status">Próximamente</span>
-              </button>
-
-              <button
-                type="button"
-                className="card-type-option upcoming"
-                disabled
-              >
-                <span className="card-type-icon">
-                  <Users size={25} />
-                </span>
-                <span className="card-type-copy">
-                  <strong>Afiliación</strong>
-                  <small>Beneficios exclusivos para clientes afiliados.</small>
-                </span>
-                <span className="card-type-status">Próximamente</span>
-              </button>
-
-              <button
-                type="button"
-                className="card-type-option upcoming"
-                disabled
-              >
-                <span className="card-type-icon">
-                  <BadgePercent size={25} />
-                </span>
-                <span className="card-type-copy">
-                  <strong>Descuentos</strong>
-                  <small>Ofertas especiales y descuentos recurrentes.</small>
-                </span>
-                <span className="card-type-status">Próximamente</span>
-              </button>
-
-              <button
-                type="button"
-                className="card-type-option available"
+                className={`card-type-option available ${form.programType === 3 ? "selected" : ""}`}
+                aria-pressed={form.programType === 3}
                 onClick={() => selectProgramType(3)}
               >
                 <span className="card-type-icon">
@@ -1433,12 +1468,12 @@ export default function CardEditorPage() {
                   <small>Devuelve una parte de cada compra como saldo.</small>
                 </span>
 
-                <span className="card-type-status available">Disponible</span>
               </button>
 
               <button
                 type="button"
-                className="card-type-option available"
+                className={`card-type-option available ${form.programType === 4 ? "selected" : ""}`}
+                aria-pressed={form.programType === 4}
                 onClick={() => selectProgramType(4)}
               >
                 <span className="card-type-icon">
@@ -1453,12 +1488,13 @@ export default function CardEditorPage() {
                   </small>
                 </span>
 
-                <span className="card-type-status available">Disponible</span>
               </button>
               <button
                 type="button"
-                className="card-type-option upcoming"
-                disabled
+                className={`card-type-option ${subscriptionsEnabled ? "available" : "upcoming"} ${form.programType === 6 ? "selected" : ""}`}
+                disabled={!subscriptionsEnabled}
+                aria-pressed={form.programType === 6}
+                onClick={() => selectProgramType(6)}
               >
                 <span className="card-type-icon">
                   <Crown size={25} />
@@ -1467,12 +1503,12 @@ export default function CardEditorPage() {
                   <strong>Suscripción</strong>
                   <small>Planes periódicos con beneficios incluidos.</small>
                 </span>
-                <span className="card-type-status">Próximamente</span>
               </button>
 
               <button
                 type="button"
-                className="card-type-option available"
+                className={`card-type-option available ${form.programType === 5 ? "selected" : ""}`}
+                aria-pressed={form.programType === 5}
                 onClick={() => selectProgramType(5)}
               >
                 <span className="card-type-icon">
@@ -1482,23 +1518,18 @@ export default function CardEditorPage() {
                   <strong>Tarjeta de regalo</strong>
                   <small>Saldo digital para regalar y utilizar después.</small>
                 </span>
-                <span className="card-type-status available">Disponible</span>
               </button>
             </div>
 
-            <p className="card-type-modal-note">
-              Estamos preparando nuevos tipos de tarjeta para futuras versiones
-              de Fidara.
-            </p>
           </section>
         </div>
       )}
 
       <section className="card-editor-heading">
         <div>
-          <span className="page-eyebrow">Programa de lealtad</span>
+          <span className="page-eyebrow">Mi tarjeta</span>
 
-          <h1>{isNewProgram ? "Crear tarjeta" : "Editar tarjeta"}</h1>
+          <h1>{editorTitle}</h1>
 
           <p>
             Personaliza la experiencia que tus clientes guardan en su Wallet.
@@ -1529,6 +1560,7 @@ export default function CardEditorPage() {
 
       {error && <div className="card-editor-alert error-box">{error}</div>}
 
+
       <div className="card-editor-layout">
         <form
           id="program-form"
@@ -1542,51 +1574,45 @@ export default function CardEditorPage() {
               </span>
 
               <div>
-                <h2>Programa</h2>
+                <h2>Información del programa</h2>
                 <p>Información principal de tu tarjeta.</p>
               </div>
             </div>
 
-            <div className="selected-program-summary">
-              <span className="selected-program-icon">
-                {isStampProgram ? (
-                  <Stamp size={22} />
-                ) : isPointsProgram ? (
-                  <Coins size={22} />
-                ) : isCashbackProgram ? (
-                  <Banknote size={22} />
-                ) : isGiftCardProgram ? (
-                  <CreditCard size={22} />
-                ) : (
-                  <Ticket size={22} />
-                )}
-              </span>
+            {isNewProgram ? (
+              <div className="selected-program-summary">
+                <span className="selected-program-main">
+                  <span className="selected-program-icon">
+                    {isStampProgram ? (
+                      <Stamp size={22} />
+                    ) : isPointsProgram ? (
+                      <Coins size={22} />
+                    ) : isCashbackProgram ? (
+                      <Banknote size={22} />
+                    ) : isGiftCardProgram ? (
+                      <CreditCard size={22} />
+                    ) : isSubscriptionProgram ? (
+                      <Crown size={22} />
+                    ) : (
+                      <Ticket size={22} />
+                    )}
+                  </span>
 
-              <span>
-                <small>Tipo de tarjeta</small>
-                <strong>
-                  {isStampProgram
-                    ? "Programa de sellos"
-                    : isPointsProgram
-                      ? "Programa de puntos"
-                      : isCashbackProgram
-                        ? "Programa de cashback"
-                        : isGiftCardProgram
-                          ? "Programa Gift Card"
-                          : "Programa de cupones"}
-                </strong>
-              </span>
-
-              {isNewProgram ? (
+                  <span className="selected-program-copy">
+                    <small>Tipo de tarjeta</small>
+                    <strong>{programTypeLabel}</strong>
+                  </span>
+                </span>
                 <button type="button" onClick={() => setShowTypeSelector(true)}>
                   Cambiar tipo
                 </button>
-              ) : (
-                <small className="selected-program-locked">
-                  No se puede cambiar después de crearla
-                </small>
-              )}
-            </div>
+              </div>
+            ) : (
+              <p className="existing-program-type">
+                <small>Tipo de tarjeta</small>
+                <strong>{programTypeLabel}</strong>
+              </p>
+            )}
 
             {isPointsProgram && (
               <div className="points-earning-settings">
@@ -2655,11 +2681,34 @@ export default function CardEditorPage() {
 
         <aside className="wallet-preview-column">
           <div className="wallet-preview-sticky">
-            <span className="page-eyebrow">Vista previa</span>
-
-            <h2>Apple Wallet</h2>
+            <div className="wallet-preview-heading">
+              <span className="page-eyebrow">Vista previa</span>
+              <div className="wallet-platform-switch" role="group" aria-label="Plataforma de vista previa">
+                <button
+                  type="button"
+                  className={walletPreviewPlatform === "apple" ? "selected" : ""}
+                  aria-label="Apple Wallet"
+                  aria-pressed={walletPreviewPlatform === "apple"}
+                  title="Apple Wallet"
+                  onClick={() => setWalletPreviewPlatform("apple")}
+                >
+                  <Apple size={19} />
+                </button>
+                <button
+                  type="button"
+                  className={walletPreviewPlatform === "google" ? "selected" : ""}
+                  aria-label="Google Wallet"
+                  aria-pressed={walletPreviewPlatform === "google"}
+                  title="Google Wallet"
+                  onClick={() => setWalletPreviewPlatform("google")}
+                >
+                  <AndroidWalletIcon />
+                </button>
+              </div>
+            </div>
 
             <WalletCardPreview
+              platform={walletPreviewPlatform}
               name={form.name}
               programType={form.programType}
               logoUrl={previews.logo}
@@ -2707,7 +2756,7 @@ export default function CardEditorPage() {
                 isCashbackProgram
                   ? 40
                   : isGiftCardProgram
-                    ? form.giftCardPresetAmounts.find((preset) => preset.isActive)?.amount ?? 500
+                    ? form.giftCardPresetAmounts.find((preset) => preset.isActive)?.amount ?? 0
                   : isCouponProgram
                     ? 0
                     : isPointsProgram
@@ -2719,8 +2768,7 @@ export default function CardEditorPage() {
             />
 
             <p className="preview-note">
-              Esta vista es aproximada. Apple Wallet ajusta algunos tamaños
-              según el dispositivo.
+              Esta vista es aproximada. {walletPreviewPlatform === "apple" ? "Apple Wallet" : "Google Wallet"} ajusta algunos detalles según el dispositivo.
             </p>
           </div>
           {joinUrl && program && (
@@ -2785,6 +2833,18 @@ export default function CardEditorPage() {
           )}
         </aside>
       </div>
+
+      {subscriptionsEnabled &&
+        isSubscriptionProgram &&
+        savedSubscriptionProgramId && (
+          <SubscriptionProgramPanel programId={savedSubscriptionProgramId} />
+        )}
+
+      {isGiftCardProgram && program && (
+        <div id="venta-gift-card" className="mt-6 scroll-mt-6">
+          <GiftCardSalePanel programId={program.id} />
+        </div>
+      )}
     </div>
   );
 }

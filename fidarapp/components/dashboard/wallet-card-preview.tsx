@@ -1,9 +1,10 @@
 "use client";
 
-import { Banknote, Coins, Gift } from "lucide-react";
+import { Banknote, Coins, Crown, Gift } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 type WalletCardPreviewProps = {
+  platform?: "apple" | "google";
   name: string;
   programType?: number;
 
@@ -64,6 +65,7 @@ function formatCouponDate(date: Date) {
 }
 
 export function WalletCardPreview({
+  platform = "apple",
   name,
   programType = 1,
 
@@ -111,6 +113,7 @@ export function WalletCardPreview({
   const isCashbackProgram = programType === 3;
   const isCouponProgram = programType === 4;
   const isGiftCardProgram = programType === 5;
+  const isSubscriptionProgram = programType === 6;
 
   const numericBalance = Math.max(0, Number(balance) || 0);
 
@@ -206,6 +209,127 @@ export function WalletCardPreview({
 
     return "Sin vencimiento";
   })();
+
+  const googlePrimary = isPointsProgram
+    ? {
+        label: "Puntos disponibles",
+        value: `${progressBalance.toLocaleString("es-MX")} puntos`,
+      }
+    : isCashbackProgram
+      ? {
+          label: "Saldo cashback",
+          value: `$${moneyFormatter.format(numericBalance)} ${currency}`,
+        }
+      : isCouponProgram
+        ? { label: "Beneficio", value: couponBenefitText }
+        : isGiftCardProgram
+          ? {
+              label: "Saldo disponible",
+              value: `$${moneyFormatter.format(numericBalance)} ${currency}`,
+            }
+          : isSubscriptionProgram
+            ? { label: "Membresía", value: "Plan de suscripción" }
+            : {
+                label: "Progreso",
+                value: `${progressBalance} de ${target} sellos`,
+              };
+
+  const googleSecondary = isPointsProgram
+    ? { label: "Meta", value: `${target.toLocaleString("es-MX")} puntos` }
+    : isCashbackProgram
+      ? {
+          label: "Mínimo para usar",
+          value: `$${moneyFormatter.format(minimumRedemption)} ${currency}`,
+        }
+      : isCouponProgram
+        ? { label: "Vigencia", value: couponExpirationText }
+        : isGiftCardProgram
+          ? { label: "Estado", value: "Activa" }
+          : isSubscriptionProgram
+            ? { label: "Estado", value: "Activa" }
+            : {
+                label: "Recompensas",
+                value: `${rewardsAvailable} disponibles`,
+              };
+
+  const googleCard = (
+    <div
+      className={`google-wallet-preview ${compact ? "compact" : ""}`}
+      style={{
+        backgroundColor: effectiveBackgroundColor,
+        color: foregroundColor || "#ffffff",
+      }}
+    >
+      <div className="google-wallet-brand">
+        <div>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={`Logo de ${name}`} />
+          ) : (
+            <span className="google-wallet-logo-placeholder">F</span>
+          )}
+          <strong>{name || "Tu programa"}</strong>
+        </div>
+        <small>Google Wallet</small>
+      </div>
+
+      <div className="google-wallet-hero" style={centralAreaStyle}>
+        {isStampProgram ? (
+          <div className="google-wallet-stamps" aria-label={googlePrimary.value}>
+            {Array.from({ length: visibleStamps }).map((_, index) => {
+              const completed = index < progressBalance;
+              const imageUrl = completed ? activeStampUrl : inactiveStampUrl;
+              return (
+                <span key={index} className={completed ? "active" : "inactive"}>
+                  {imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imageUrl} alt="" />
+                  ) : (
+                    <span className="stamp-placeholder" />
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="google-wallet-hero-copy">
+            <small style={{ color: labelColor || foregroundColor || "#ffffff" }}>
+              {googlePrimary.label}
+            </small>
+            <strong>{googlePrimary.value}</strong>
+          </div>
+        )}
+      </div>
+
+      <div className="google-wallet-fields">
+        <div>
+          <small style={{ color: labelColor || foregroundColor || "#ffffff" }}>
+            {googlePrimary.label}
+          </small>
+          <strong>{googlePrimary.value}</strong>
+        </div>
+        <div>
+          <small style={{ color: labelColor || foregroundColor || "#ffffff" }}>
+            {googleSecondary.label}
+          </small>
+          <strong>{googleSecondary.value}</strong>
+        </div>
+      </div>
+
+      <div className="google-wallet-barcode">
+        <QRCodeSVG
+          value="https://fidara.mx"
+          size={compact ? 76 : 112}
+          level="M"
+          marginSize={1}
+          bgColor="#ffffff"
+          fgColor="#000000"
+          title="Código QR de Fidara"
+        />
+        {showPoweredByFidara && <small>Powered by Fidara</small>}
+      </div>
+    </div>
+  );
 
   const card = (
     <div
@@ -321,6 +445,24 @@ export function WalletCardPreview({
         </div>
       )}
 
+      {isSubscriptionProgram && (
+        <div
+          className="wallet-points-preview wallet-cashback-preview"
+          style={centralAreaStyle}
+        >
+          <span className="wallet-points-icon" aria-hidden="true">
+            <Crown size={compact ? 20 : 28} />
+          </span>
+          <div className="wallet-points-copy">
+            <small style={{ color: labelColor || "#f5f1e8" }}>
+              MEMBRESÍA
+            </small>
+            <strong>Plan de suscripción</strong>
+            <span>Beneficios exclusivos para socios</span>
+          </div>
+        </div>
+      )}
+
       {isStampProgram && (
         <div className="wallet-stamps-preview" style={centralAreaStyle}>
           {Array.from({ length: visibleStamps }).map((_, index) => {
@@ -352,6 +494,8 @@ export function WalletCardPreview({
                 ? "MÍNIMO PARA USAR"
                 : isGiftCardProgram
                   ? "IMPORTE ORIGINAL"
+                : isSubscriptionProgram
+                  ? "PLAN"
                 : isPointsProgram
                   ? "META DE PUNTOS"
                   : "TU PROGRESO"}
@@ -362,6 +506,8 @@ export function WalletCardPreview({
                 ? `$${moneyFormatter.format(minimumRedemption)} ${currency}`
                 : isGiftCardProgram
                   ? `$${moneyFormatter.format(numericBalance)} ${currency}`
+                : isSubscriptionProgram
+                  ? "Configurable"
                 : isPointsProgram
                   ? `${target.toLocaleString("es-MX")} puntos`
                   : `${progressBalance} de ${target}`}
@@ -374,6 +520,8 @@ export function WalletCardPreview({
                 ? "DISPONIBLE PARA USAR"
                 : isGiftCardProgram
                   ? "ESTADO"
+                : isSubscriptionProgram
+                  ? "ESTADO"
                 : "RECOMPENSAS DISPONIBLES"}
             </small>
 
@@ -383,6 +531,8 @@ export function WalletCardPreview({
                   ? `$${moneyFormatter.format(numericBalance)} ${currency}`
                   : "Aún no"
                 : isGiftCardProgram
+                  ? "Activa"
+                : isSubscriptionProgram
                   ? "Activa"
                 : `${rewardsAvailable} ${
                     rewardsAvailable === 1 ? "recompensa" : "recompensas"
@@ -408,8 +558,10 @@ export function WalletCardPreview({
     </div>
   );
 
+  const selectedCard = platform === "google" ? googleCard : card;
+
   if (!phoneFrame) {
-    return card;
+    return selectedCard;
   }
 
   return (
@@ -418,7 +570,7 @@ export function WalletCardPreview({
         <span />
       </div>
 
-      <div className="iphone-screen">{card}</div>
+      <div className="iphone-screen">{selectedCard}</div>
 
       <div className="iphone-home-indicator" aria-hidden="true" />
     </div>

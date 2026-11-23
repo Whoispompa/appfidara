@@ -37,6 +37,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { GiftCardStatistics } from "@/components/gift-cards/gift-card-statistics";
+import { SubscriptionStatistics } from "@/components/subscriptions/subscription-statistics";
+import { subscriptionsEnabled } from "@/lib/subscriptions";
 
 type PeriodMetrics = {
   operations: number;
@@ -661,6 +664,9 @@ export default function StatisticsPage() {
                 <option value="5">
                   Gift Cards
                 </option>
+                {subscriptionsEnabled && (
+                  <option value="6">Suscripciones</option>
+                )}
               </select>
             </label>
 
@@ -860,6 +866,9 @@ export default function StatisticsPage() {
                 );
               })}
             </section>
+
+            <GiftCardStatistics from={from} to={to} />
+            {subscriptionsEnabled && <SubscriptionStatistics from={from} to={to} />}
 
             <section className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(340px,.7fr)]">
               <article className="rounded-[22px] border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_45px_rgba(0,0,0,0.05)] sm:p-6">

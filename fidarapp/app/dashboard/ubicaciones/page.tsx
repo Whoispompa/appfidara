@@ -20,6 +20,7 @@ import {
   type FormEvent,
 } from "react";
 import { toast } from "sonner";
+import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
 import styles from "./locations.module.css";
 
 const GooglePlacePicker = dynamic(
@@ -156,7 +157,8 @@ export default function LocationsPage() {
   }, []);
 
   useEffect(() => {
-    void loadLocations();
+    const timeoutId = window.setTimeout(() => void loadLocations(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadLocations]);
 
   useEffect(() => {
@@ -322,7 +324,6 @@ export default function LocationsPage() {
     const nextStatus = !location.isActive;
 
     setChangingStatusId(location.id);
-    setStatusConfirmation(null);
     setError("");
 
     try {
@@ -357,6 +358,8 @@ export default function LocationsPage() {
         ),
       );
 
+      setStatusConfirmation(null);
+
       toast.success(nextStatus ? "Sucursal reactivada" : "Sucursal archivada", {
         description: nextStatus
           ? `${location.name} vuelve a estar disponible.`
@@ -382,14 +385,16 @@ export default function LocationsPage() {
           <h1>Sucursales</h1>
         </div>
 
-        <button
-          className={styles.primaryButton}
-          type="button"
-          onClick={openCreateForm}
-        >
-          <Plus size={19} />
-          Nueva sucursal
-        </button>
+        <div className={styles.headingActions}>
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={openCreateForm}
+          >
+            <Plus size={19} />
+            Nueva sucursal
+          </button>
+        </div>
       </section>
 
      
@@ -654,86 +659,52 @@ export default function LocationsPage() {
         </div>
       )}
 
-      {statusConfirmation && (
-        <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-[#111827]/60 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={() => setStatusConfirmation(null)}
-        >
-          <section
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="status-dialog-title"
-            className="w-full max-w-md rounded-[24px] border border-[#E5E7EB] bg-white p-6 shadow-[0_30px_90px_rgba(17,24,39,0.30)] sm:p-7"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-5">
-              <span
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${
-                  statusConfirmation.nextStatus
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-rose-50 text-[#E11D48]"
-                }`}
-              >
-                {statusConfirmation.nextStatus ? (
-                  <Power size={22} />
-                ) : (
-                  <AlertTriangle size={22} />
-                )}
-              </span>
-
-              <button
-                type="button"
-                className="grid h-9 w-9 place-items-center rounded-xl bg-[#F3F4F6] text-[#6B7280] transition hover:text-[#111827]"
-                onClick={() => setStatusConfirmation(null)}
-                aria-label="Cerrar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <h2
-              id="status-dialog-title"
-              className="mt-5 text-xl font-extrabold tracking-[-0.025em] text-[#111827]"
-            >
-              {statusConfirmation.nextStatus
-                ? "¿Reactivar sucursal?"
-                : "¿Archivar sucursal?"}
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-              {statusConfirmation.nextStatus
-                ? `${statusConfirmation.location.name} volverá a estar disponible para tu equipo.`
-                : `${statusConfirmation.location.name} dejará de estar disponible para nuevas operaciones, pero conservará todo su historial.`}
-            </p>
-
-            <div className="mt-7 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
-              <button
-                type="button"
-                className="min-h-11 rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] transition hover:bg-[#F3F4F6]"
-                onClick={() => setStatusConfirmation(null)}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-extrabold text-white transition hover:-translate-y-0.5 ${
-                  statusConfirmation.nextStatus
-                    ? "bg-emerald-700 shadow-lg shadow-emerald-700/20 hover:bg-emerald-800"
-                    : "bg-[#E11D48] shadow-lg shadow-[#E11D48]/20 hover:bg-[#BE123C]"
-                }`}
-                onClick={() => void changeStatus(statusConfirmation.location)}
-              >
-                <Power size={17} />
-                {statusConfirmation.nextStatus
-                  ? "Sí, reactivar"
-                  : "Sí, archivar"}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <FidaraConfirmDialog
+        open={Boolean(statusConfirmation)}
+        onOpenChange={(open) => {
+          if (!open) setStatusConfirmation(null);
+        }}
+        icon={
+          statusConfirmation?.nextStatus ? (
+            <Power size={22} />
+          ) : (
+            <AlertTriangle size={22} />
+          )
+        }
+        iconClassName={
+          statusConfirmation?.nextStatus
+            ? "bg-emerald-50 text-emerald-700"
+            : undefined
+        }
+        title={
+          statusConfirmation?.nextStatus
+            ? "¿Reactivar sucursal?"
+            : "¿Archivar sucursal?"
+        }
+        description={
+          statusConfirmation?.nextStatus
+            ? `${statusConfirmation.location.name} volverá a estar disponible para tu equipo.`
+            : `${statusConfirmation?.location.name ?? "La sucursal"} dejará de estar disponible para nuevas operaciones, pero conservará todo su historial.`
+        }
+        confirmLabel={
+          statusConfirmation?.nextStatus ? "Sí, reactivar" : "Sí, archivar"
+        }
+        busyLabel="Guardando…"
+        confirmIcon={<Power size={17} />}
+        confirmClassName={
+          statusConfirmation?.nextStatus
+            ? "bg-emerald-700 shadow-emerald-700/20 hover:bg-emerald-800"
+            : undefined
+        }
+        busy={
+          Boolean(statusConfirmation) &&
+          changingStatusId === statusConfirmation?.location.id
+        }
+        confirmDisabled={!statusConfirmation}
+        onConfirm={() => {
+          if (statusConfirmation) void changeStatus(statusConfirmation.location);
+        }}
+      />
 
     </main>
   );

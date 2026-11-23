@@ -78,6 +78,20 @@ export async function POST(
     const formData =
       await request.formData();
 
+    if (
+      String(formData.get("ProgramType")) === "6" &&
+      process.env.FIDARA_SUBSCRIPTIONS_ENABLED !== "true"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "SUBSCRIPTIONS_DISABLED",
+          message: "La modalidad Suscripciones aún no está disponible.",
+        },
+        { status: 404 },
+      );
+    }
+
     const upstream = await fetch(
       `${apiUrl}/api/programs`,
       {

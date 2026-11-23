@@ -68,3 +68,86 @@ export async function GET(
     );
   }
 }
+
+export async function POST(
+  request: NextRequest,
+) {
+  if (
+    process.env.FIDARA_SUBSCRIPTIONS_ENABLED !== "true"
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "SUBSCRIPTIONS_DISABLED",
+        message: "La modalidad Suscripciones aún no está disponible.",
+      },
+      { status: 404 },
+    );
+  }
+
+  const cookieStore = await cookies();
+  const token = cookieStore.get("fidara_token")?.value;
+
+  if (!token) {
+    return NextResponse.json(
+      { success: false, message: "Tu sesión ha expirado." },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+    const upstream = await fetch(`${apiUrl}/api/customers`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        firstName: body.firstName,
+        lastName: body.lastName ?? null,
+        email: body.email ?? null,
+        phone: body.phone ?? null,
+        birthDate: body.birthDate ?? null,
+        marketingConsent: body.marketingConsent === true,
+      }),
+      cache: "no-store",
+    });
+    const raw = await upstream.text();
+    const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
+
+    if (!raw.trim() || !contentType.includes("json")) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_UPSTREAM_RESPONSE",
+          message: `Fidara.Api no respondió correctamente (HTTP ${upstream.status}).`,
+        },
+        { status: upstream.status || 502 },
+      );
+    }
+
+    try {
+      return NextResponse.json(JSON.parse(raw), {
+        status: upstream.status,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_UPSTREAM_JSON",
+          message: `Fidara.Api devolvió JSON inválido (HTTP ${upstream.status}).`,
+        },
+        { status: upstream.status || 502 },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "No fue posible conectar con Fidara." },
+      { status: 502 },
+    );
+  }
+}

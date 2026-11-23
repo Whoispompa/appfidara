@@ -1,175 +1,117 @@
-# Fidara - Development Instructions
+# Fidara API — Instrucciones de desarrollo
 
-## 1. Objetivo
+## Objetivo
 
-Mantener y desarrollar app.fidara.mx de forma segura,
-eficiente y con el menor consumo de contexto posible.
+Mantener la API .NET 10 de Fidara con cambios seguros, específicos y eficientes. Responder siempre en español, minimizando el consumo de tokens.
 
-Estas instrucciones aplican al proyecto frontend fidarapp.
+## Contexto y navegación
 
-## 2. Optimización de tokens
+- Buscar símbolos y rutas antes de abrir archivos.
+- Leer únicamente fragmentos relevantes.
+- Evitar lecturas repetidas y archivos generados.
+- Consultar documentación y skills solo cuando aporten información necesaria.
+- No realizar auditorías generales ni análisis ya documentados.
+- No explorar módulos ajenos a la solicitud.
 
-- Buscar símbolos y funciones antes de leer archivos completos.
-- Leer únicamente las secciones relevantes para la tarea.
-- Evitar exploraciones completas del repositorio.
-- No repetir lecturas innecesarias.
-- No devolver archivos completos en las respuestas.
-- Ampliar el contexto únicamente cuando sea necesario.
-- Evitar búsquedas redundantes.
-- No cargar documentación que no corresponda a la tarea.
-- No omitir dependencias necesarias para una corrección segura.
+## Edición
 
-## 3. Directorios excluidos
+- Realizar exclusivamente los cambios solicitados.
+- Preservar código, comentarios y modificaciones existentes.
+- No refactorizar ni reformatear código fuera del alcance.
+- Reutilizar servicios, DTO, validaciones y convenciones existentes.
+- No inventar contratos, columnas, tablas, rutas ni enumeradores.
+- Verificar compatibilidad con app.fidara.mx y get.fidara.mx.
+- Utilizar Git únicamente cuando exista un repositorio válido.
 
-No explorar salvo necesidad justificada:
+## Seguridad e infraestructura
 
-- node_modules/
-- .next/
-- out/
-- dist/
+- No leer ni mostrar secretos, certificados privados ni tokens.
+- No conectarse a producción ni modificar datos reales sin autorización.
+- No ejecutar SQL, migraciones o despliegues automáticamente.
+- No instalar dependencias, modificar configuración sensible ni hacer commits sin autorización.
+- No modificar Program.cs, Data Protection ni configuración de alojamiento fuera del alcance explícito.
+- Preservar JWT, permisos, aislamiento por negocio y validaciones del servidor.
+
+## Reglas financieras
+
+- Utilizar decimal con precisión explícita.
+- Mantener transacciones, idempotencia y control de concurrencia.
+- No confiar en importes calculados por el frontend.
+- Preservar los saldos existentes.
+- No duplicar ingresos al canjear Gift Cards.
+- Mantener registros auditables de movimientos.
+- No modificar enumeradores existentes ni sus valores numéricos.
+- Gift Cards corresponde a la modalidad 5.
+
+## Apple Wallet y Google Wallet
+
+- Mantener compatibilidad con pases, seriales, registros y protocolos actuales.
+- No modificar Wallet si la tarea no lo requiere.
+- Ejecutar pruebas específicas de Wallet cuando cambie su lógica.
+- No ejecutar pruebas de Wallet por modificaciones que no lo afecten.
+
+## Gift Cards
+
+- Mantener separados los importes de emisión, saldo disponible, canjes y cobros complementarios.
+- Preservar transacciones e idempotencia.
+- Ejecutar pruebas específicas cuando se modifique lógica financiera crítica.
+- No ejecutar suites completas por cambios únicamente visuales, documentales o independientes de Gift Cards.
+
+## Documentación
+
+Referencias principales:
+
+- docs/PROJECT_MAP.md
+- docs/ARCHITECTURE.md
+- docs/DATABASE.md
+- docs/API_CONTRACTS.md
+
+Utilizar únicamente los documentos relevantes para cada tarea.
+
+Actualizar documentación solo cuando cambien contratos, arquitectura o reglas importantes.
+
+## Estructura
+
+- Raíz de solución: Fidara.Api/
+- Código principal: Fidara.Api/
+- Documentación: docs/
+- Skills: .agents/skills/
+
+## Validaciones eficientes
+
+- Para cambios de documentación, no compilar.
+- Para cambios pequeños, ejecutar la comprobación mínima necesaria.
+- Para cambios de código, realizar una compilación final cuando corresponda.
+- Para operaciones financieras críticas, ejecutar las pruebas específicas afectadas.
+- Evitar repetir suites completas si no existen cambios relacionados.
+- No iniciar servicios contra conexiones desconocidas.
+- No eliminar validaciones funcionales ni de seguridad para ahorrar tokens.
+
+## Respuesta de Codex
+
+Entregar un reporte de máximo 10 líneas con:
+
+- Archivos modificados.
+- Resultado de compilación o prueba, si se ejecutó.
+- Errores o riesgos relevantes.
+
+No generar explicaciones extensas, recomendaciones no solicitadas ni reportes repetitivos.
+
+El usuario realizará pruebas funcionales manuales y reportará los errores encontrados.
+
+## Restricciones
+
+- No publicar automáticamente.
+- No modificar datos de producción.
+- No corregir problemas ajenos a la solicitud.
+- No agregar funcionalidades no solicitadas.
+
+## Directorios excluidos
+
+- .vs/
+- TestResults/
 - bin/
 - obj/
 - publish/
 - fidarapublish/
-- fidaranewpublish/
-- .git/
-- coverage/
-
-Utilizar comandos específicos de Git para consultar cambios,
-sin explorar directamente su directorio interno.
-
-## 4. Edición de código
-
-- Revisar el estado de Git antes de editar.
-- Realizar cambios pequeños y específicos.
-- Preservar comentarios y documentación existente.
-- No eliminar funcionalidades que ya funcionan.
-- No realizar refactorizaciones no solicitadas.
-- No reformatear archivos completos innecesariamente.
-- Reutilizar componentes y funciones existentes.
-- Respetar los cambios previos del usuario.
-- Mantener compatibilidad con Next.js y TypeScript.
-- No modificar archivos ajenos a la tarea.
-- No revertir cambios del usuario sin autorización.
-- Mantener las convenciones actuales del proyecto.
-
-## 5. Arquitectura
-
-- Frontend: Next.js, TypeScript y Tailwind CSS.
-- Backend: API .NET 8 en https://api.fidara.mx.
-- Aplicación administrativa: https://app.fidara.mx.
-- Respetar los contratos de la API existente.
-- Preservar autenticación, permisos y aislamiento entre negocios.
-- No inventar endpoints ni propiedades de la API.
-- Verificar contratos existentes antes de realizar modificaciones.
-- No duplicar lógica de negocio innecesariamente.
-
-## 6. Identidad visual
-
-- Primario: #E11D48
-- Oscuro: #111827
-- Secundario: #6B7280
-- Fondo: #F3F4F6
-- Tipografía: Poppins.
-- Utilizar los logos oficiales existentes en public/.
-- Mantener diseño profesional y responsive.
-- No modificar la interfaz si la tarea es funcional.
-- Reutilizar componentes visuales existentes.
-- Preservar la consistencia visual entre módulos.
-
-Consultar docs/BRAND.md únicamente para tareas visuales.
-
-## 7. Seguridad
-
-- No leer ni mostrar secretos o credenciales.
-- No leer certificados privados.
-- No leer valores sensibles de archivos .env.
-- No modificar archivos .env sin autorización.
-- No instalar dependencias sin autorización.
-- No ejecutar git commit, push ni despliegues sin permiso.
-- No realizar pruebas que modifiquen datos reales de producción.
-- Utilizar datos simulados o entornos locales para pruebas.
-- Preservar las validaciones de seguridad existentes.
-
-## 8. Documentación y contexto
-
-Consultar exclusivamente los documentos necesarios:
-
-- docs/PROJECT_MAP.md:
-  Localización de módulos y archivos.
-
-- docs/ARCHITECTURE.md:
-  Arquitectura, servicios e integraciones.
-
-- docs/BRAND.md:
-  Identidad visual y diseño.
-
-No cargar todos los documentos automáticamente.
-
-Actualizar la documentación correspondiente cuando un cambio
-modifique significativamente la arquitectura o estructura.
-
-## 9. Skills disponibles
-
-Utilizar las skills de .agents/skills según la tarea:
-
-- fidara-frontend:
-  Next.js, TypeScript, rutas, componentes y dashboard.
-
-- fidara-wallet:
-  Apple Wallet, Google Wallet, sellos, cashback y recompensas.
-
-- fidara-ui:
-  Diseño, identidad visual y componentes responsive.
-
-- fidara-deploy:
-  Compilación, publicación y despliegue.
-
-Utilizar únicamente las skills relevantes para la tarea.
-No leer todas las skills por defecto.
-
-## 10. Validación
-
-- Revisar git diff antes de finalizar.
-- Ejecutar comprobaciones relacionadas con el cambio.
-- Utilizar la comprobación más pequeña que sea suficiente.
-- No compilar todo el proyecto si basta una prueba específica.
-- No corregir errores no relacionados sin autorización.
-- Nunca afirmar que una función funciona sin verificarla.
-- Informar si existen errores previos o pruebas pendientes.
-
-## 11. Respuestas
-
-- Responder siempre en español.
-- Ser conciso y directo.
-- Indicar los archivos modificados.
-- Explicar brevemente los cambios.
-- Informar las validaciones realizadas.
-- Informar errores pendientes.
-- No imprimir código completo innecesariamente.
-- Evitar explicaciones repetitivas.
-- No sugerir cambios fuera del alcance solicitado.
-
-## 12. Prioridad de desarrollo
-
-1. Seguridad e integridad de los datos.
-2. Preservar funcionalidades existentes.
-3. Cumplir la tarea solicitada.
-4. Mantener calidad y consistencia del código.
-5. Optimizar el consumo de tokens.
-
-## 13. Notificaciones y confirmaciones
-
-- Utilizar Sonner como sistema estándar de notificaciones.
-- No utilizar alert(), confirm() ni prompt() nativos.
-- Reutilizar el Toaster existente.
-- No duplicar sistemas de notificaciones.
-- Utilizar AlertDialog para confirmaciones.
-- Utilizar Dialog para solicitar datos al usuario.
-- Mantener validaciones de campos dentro de los formularios.
-- Mostrar mensajes claros, concisos y en español.
-- Evitar notificaciones duplicadas.
-- No mostrar mensajes de éxito antes de confirmar
-  que la operación se completó correctamente.
-- Mantener consistencia visual en todos los módulos.
-
+- logs/

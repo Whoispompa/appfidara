@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   CalendarDays,
   Check,
   Coins,
@@ -16,7 +15,6 @@ import {
   Mail,
   Phone,
   QrCode,
-  RotateCcw,
   ShoppingBag,
   Stamp,
   TicketPercent,
@@ -27,7 +25,6 @@ import {
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -39,6 +36,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
+import { useActiveLocation } from "@/components/gift-cards/active-location";
+import { SubscriptionScanPanel } from "@/components/subscriptions/subscription-scan-panel";
+import {
+  complementaryPaymentMethodLabel,
+  type GiftCardComplementaryPaymentStatus,
+} from "@/lib/gift-card-complementary-payment";
+import {
+  type ApiEnvelope as SubscriptionEnvelope,
+  type MembershipLookup,
+  subscriptionsEnabled,
+} from "@/lib/subscriptions";
 
 const Scanner = dynamic(
   () =>
@@ -196,15 +205,37 @@ type ApiPayload = {
 };
 
 type GiftCardInformation = {
-  id?: string;
+  id: string;
   programName?: string;
   recipientName?: string;
-  balance: number;
-  originalAmount?: number;
-  amount?: number;
+  currentBalance: number;
+  purchasedAmount: number;
   currency?: string;
   status?: number;
   expiresAtUtc?: string | null;
+};
+
+type GiftCardMovement = {
+  operationId?: string;
+  movementType?: number | string;
+  amount?: number;
+  purchaseAmount?: number | null;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  reference?: string | null;
+  createdAtUtc?: string;
+  complementaryPaymentStatus?: GiftCardComplementaryPaymentStatus | null;
+  complementaryPaymentMethod?: number | null;
+  complementaryPaymentReference?: string | null;
+  complementaryPaymentDueAmount?: number | null;
+  complementaryPaymentCollectedAmount?: number | null;
+  complementaryPaymentPendingAmount?: number | null;
+  complementaryPaymentUnverifiedAmount?: number | null;
+};
+
+type GiftCardShare = {
+  publicUrl?: string;
+  whatsAppUrl?: string;
 };
 
 type GiftCardRedeemResult = {
@@ -212,10 +243,51 @@ type GiftCardRedeemResult = {
   balanceBefore?: number;
   balanceAfter?: number;
   amount?: number;
+  purchaseAmount?: number;
+  remainingToPay?: number;
+  complementaryPaymentStatus?: GiftCardComplementaryPaymentStatus;
+  complementaryPaymentMethod?: number | null;
+  complementaryPaymentReference?: string | null;
+  complementaryPaymentDueAmount?: number;
+  complementaryPaymentCollectedAmount?: number;
+  complementaryPaymentPendingAmount?: number;
+  complementaryPaymentUnverifiedAmount?: number;
   status?: number;
   replayed?: boolean;
   warnings?: string[];
 };
+
+type GiftCardRedeemRequest = {
+  qrToken: string;
+  purchaseAmount: number;
+  amount: number;
+  idempotencyKey: string;
+  reference: string | null;
+  notes: null;
+  complementaryPaymentConfirmed?: true;
+  complementaryPaymentMethod?: number;
+  complementaryPaymentReference?: string | null;
+};
+
+type ComplementaryPaymentAttempt = {
+  confirmed: true;
+  method: number;
+  reference: string | null;
+};
+
+function moneyToCents(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
+
+  const [wholePart, decimalPart = ""] = normalized.split(".");
+  const cents = Number(wholePart) * 100 + Number(decimalPart.padEnd(2, "0"));
+
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+function centsToInput(cents: number) {
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+}
 
 function resolveLogoUrl(value?: string | null) {
   if (!value) return null;
@@ -235,6 +307,36 @@ function formatMoney(value?: number | null) {
   }).format(Number(value ?? 0));
 }
 
+function complementaryPaymentSummary(input: {
+  complementaryPaymentStatus?: GiftCardComplementaryPaymentStatus | null;
+  complementaryPaymentMethod?: number | null;
+  complementaryPaymentReference?: string | null;
+  complementaryPaymentCollectedAmount?: number | null;
+  complementaryPaymentUnverifiedAmount?: number | null;
+}) {
+  if (input.complementaryPaymentStatus === 1) {
+    return "Cobro complementario no requerido";
+  }
+  if (input.complementaryPaymentStatus === 2) {
+    const method = complementaryPaymentMethodLabel(
+      input.complementaryPaymentMethod,
+    );
+    return [
+      `Cobro complementario confirmado: ${formatMoney(input.complementaryPaymentCollectedAmount)}`,
+      method,
+      input.complementaryPaymentReference
+        ? `Ref. ${input.complementaryPaymentReference}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (input.complementaryPaymentStatus === 0) {
+    return `Cobro complementario no verificado: ${formatMoney(input.complementaryPaymentUnverifiedAmount)}`;
+  }
+  return null;
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "No registrada";
 
@@ -252,7 +354,21 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
+function getApiErrorMessage(
+  payload: Record<string, unknown>,
+  fallback: string,
+) {
+  const candidates = [payload.message, payload.detail, payload.error];
+  return (
+    candidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && candidate.trim().length > 0,
+    ) ?? fallback
+  );
+}
+
 export default function ScannerPage() {
+  const activeLocation = useActiveLocation();
   const [currentTimestamp] = useState(() => Date.now());
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [manualMode, setManualMode] = useState(false);
@@ -268,12 +384,96 @@ export default function ScannerPage() {
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const [card, setCard] = useState<CardInformation | null>(null);
   const [giftCard, setGiftCard] = useState<GiftCardInformation | null>(null);
+  const [membership, setMembership] = useState<MembershipLookup | null>(null);
+  const [giftCardPurchaseAmount, setGiftCardPurchaseAmount] = useState("");
   const [giftCardAmount, setGiftCardAmount] = useState("");
   const [giftCardReference, setGiftCardReference] = useState("");
+  const [complementaryPaymentConfirmed, setComplementaryPaymentConfirmed] =
+    useState(false);
+  const [complementaryPaymentMethod, setComplementaryPaymentMethod] =
+    useState(1);
+  const [complementaryPaymentReference, setComplementaryPaymentReference] =
+    useState("");
+  const [complementaryPaymentAttempt, setComplementaryPaymentAttempt] =
+    useState<ComplementaryPaymentAttempt | null>(null);
   const [giftCardDialogOpen, setGiftCardDialogOpen] = useState(false);
   const [redeemingGiftCard, setRedeemingGiftCard] = useState(false);
   const [giftCardRedemption, setGiftCardRedemption] =
     useState<GiftCardRedeemResult | null>(null);
+  const [giftCardRedemptionPurchaseCents, setGiftCardRedemptionPurchaseCents] =
+    useState<number | null>(null);
+  const [giftCardMovements, setGiftCardMovements] = useState<
+    GiftCardMovement[]
+  >([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+  const [movementsError, setMovementsError] = useState("");
+  const [giftCardContractVerified, setGiftCardContractVerified] =
+    useState(false);
+  const [, setGiftCardShare] = useState<GiftCardShare | null>(null);
+
+  const loadGiftCardMovements = useCallback(async (giftCardId: string) => {
+    setMovementsLoading(true);
+    setMovementsError("");
+    setGiftCardContractVerified(false);
+    try {
+      const response = await fetch(
+        `/api/gift-cards/${encodeURIComponent(giftCardId)}/movements`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok)
+        throw new Error(
+          getApiErrorMessage(payload, "No fue posible cargar los movimientos."),
+        );
+      const data = payload.data ?? payload;
+      const list = Array.isArray(data)
+        ? data
+        : (Object.values(data as Record<string, unknown>).find(Array.isArray) ??
+          []);
+      const movements = list as GiftCardMovement[];
+      setGiftCardMovements(movements);
+
+      const exposesPurchaseAmount = movements.some((movement) =>
+        Object.prototype.hasOwnProperty.call(movement, "purchaseAmount"),
+      );
+      if (!exposesPurchaseAmount) {
+        setMovementsError(
+          movements.length === 0
+            ? "No fue posible verificar el contrato PurchaseAmount porque el historial no devolvió movimientos. El canje permanece bloqueado."
+            : "El historial respondió con el contrato anterior y no incluye PurchaseAmount. El canje permanece bloqueado.",
+        );
+        return;
+      }
+
+      setGiftCardContractVerified(true);
+    } catch (caught) {
+      const message = getErrorMessage(
+        caught,
+        "No fue posible cargar el historial.",
+      );
+      setMovementsError(message);
+      toast.error("No se pudo cargar el historial", { description: message });
+    } finally {
+      setMovementsLoading(false);
+    }
+  }, []);
+
+  const loadGiftCardShare = useCallback(async (giftCardId: string) => {
+    try {
+      const response = await fetch(
+        `/api/gift-cards/${encodeURIComponent(giftCardId)}/share`,
+        { cache: "no-store" },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      setGiftCardShare((payload.data ?? payload) as GiftCardShare);
+    } catch {
+      // Compartir es una acción secundaria; la consulta y el canje siguen disponibles.
+    }
+  }, []);
 
   const brandLogoUrl = useMemo(
     () => resolveLogoUrl(card?.program.logoUrl ?? card?.organization.logoUrl),
@@ -504,16 +704,116 @@ export default function ScannerPage() {
     return "No disponible";
   }, [card, walletInstalled]);
 
+  const giftCardBalanceCents = Math.max(
+    0,
+    Math.round(Number(giftCard?.currentBalance ?? 0) * 100),
+  );
+  const giftCardPurchaseCents = moneyToCents(giftCardPurchaseAmount) ?? 0;
+  const giftCardAppliedCents = moneyToCents(giftCardAmount) ?? 0;
+  const giftCardMaximumCents = Math.min(
+    giftCardPurchaseCents,
+    giftCardBalanceCents,
+  );
+  const giftCardPendingCents = Math.max(
+    giftCardPurchaseCents - giftCardAppliedCents,
+    0,
+  );
+  const giftCardNewBalanceCents = Math.max(
+    giftCardBalanceCents - giftCardAppliedCents,
+    0,
+  );
+  const complementaryPaymentRequired = giftCardPendingCents > 0;
+  const complementaryPaymentIsValid =
+    !complementaryPaymentRequired ||
+    (complementaryPaymentConfirmed &&
+      [1, 2, 3].includes(complementaryPaymentMethod) &&
+      (complementaryPaymentMethod === 1 ||
+        complementaryPaymentReference.trim().length > 0));
+  const giftCardAmountsAreValid =
+    giftCardPurchaseCents > 0 &&
+    giftCardAppliedCents > 0 &&
+    giftCardAppliedCents <= giftCardPurchaseCents &&
+    giftCardAppliedCents <= giftCardBalanceCents;
+  const giftCardRedeemedCents = Math.round(
+    Number(
+      giftCardRedemption?.amount ??
+        Number(giftCardRedemption?.balanceBefore ?? 0) -
+          Number(giftCardRedemption?.balanceAfter ?? 0),
+    ) * 100,
+  );
+  const giftCardRedemptionRemainingCents = Math.round(
+    Number(
+      giftCardRedemption?.remainingToPay ??
+        Math.max(
+          Number(giftCardRedemption?.purchaseAmount ?? 0) -
+            giftCardRedeemedCents / 100,
+          0,
+        ),
+    ) * 100,
+  );
+
+  function updateGiftCardPurchaseAmount(value: string) {
+    setComplementaryPaymentAttempt(null);
+    setComplementaryPaymentConfirmed(false);
+    setComplementaryPaymentMethod(1);
+    setComplementaryPaymentReference("");
+    setGiftCardPurchaseAmount(value);
+    const purchaseCents = moneyToCents(value);
+    setGiftCardAmount(
+      purchaseCents && purchaseCents > 0
+        ? centsToInput(Math.min(purchaseCents, giftCardBalanceCents))
+        : "",
+    );
+  }
+
+  function updateGiftCardAppliedAmount(value: string) {
+    setComplementaryPaymentAttempt(null);
+    setComplementaryPaymentConfirmed(false);
+    setComplementaryPaymentMethod(1);
+    setComplementaryPaymentReference("");
+    const cents = moneyToCents(value);
+    if (cents !== null && cents > giftCardMaximumCents) {
+      setGiftCardAmount(centsToInput(giftCardMaximumCents));
+      return;
+    }
+    setGiftCardAmount(value);
+  }
+
   const lookupCard = useCallback(
     async (rawValue: string) => {
       const cleanToken = rawValue.trim();
 
-      if (!cleanToken || loading || card || giftCard) return;
+      if (!cleanToken || loading || card || giftCard || membership) return;
 
       setLoading(true);
       setQrToken(cleanToken);
 
       try {
+        if (subscriptionsEnabled) {
+          const membershipResponse = await fetch(
+            "/api/subscription-memberships/lookup",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ qrToken: cleanToken }),
+            },
+          );
+          const membershipPayload =
+            (await membershipResponse.json().catch(() => ({}))) as SubscriptionEnvelope<MembershipLookup>;
+          if (membershipResponse.ok && membershipPayload.data) {
+            setMembership(membershipPayload.data);
+            setCameraEnabled(false);
+            setManualMode(false);
+            return;
+          }
+          if (membershipResponse.status !== 404) {
+            throw new Error(
+              membershipPayload.message ??
+                "No fue posible consultar la suscripciÃ³n.",
+            );
+          }
+        }
+
         const giftResponse = await fetch("/api/gift-cards/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -523,9 +823,13 @@ export default function ScannerPage() {
         const giftPayload = await giftResponse.json().catch(() => ({}));
 
         if (giftResponse.ok) {
-          const result = (giftPayload.data ?? giftPayload) as GiftCardInformation;
+          const result = (giftPayload.data ??
+            giftPayload) as GiftCardInformation;
           setGiftCard(result);
-          setGiftCardAmount(String(result.balance ?? ""));
+          setGiftCardPurchaseAmount("");
+          setGiftCardAmount("");
+          void loadGiftCardMovements(result.id);
+          void loadGiftCardShare(result.id);
           setCameraEnabled(false);
           setManualMode(false);
           return;
@@ -563,21 +867,65 @@ export default function ScannerPage() {
         setLoading(false);
       }
     },
-    [card, giftCard, loading],
+    [
+      card,
+      giftCard,
+      membership,
+      loadGiftCardMovements,
+      loadGiftCardShare,
+      loading,
+    ],
   );
 
   async function redeemGiftCard() {
     if (!giftCard || redeemingGiftCard) return;
 
-    const amount = Number(giftCardAmount);
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      amount > giftCard.balance ||
-      Math.round(amount * 100) !== amount * 100
-    ) {
-      toast.error("Ingresa un importe válido que no supere el saldo.");
+    const purchaseCents = moneyToCents(giftCardPurchaseAmount);
+    const amountCents = moneyToCents(giftCardAmount);
+    const balanceCents = Math.round(giftCard.currentBalance * 100);
+
+    if (!purchaseCents || purchaseCents <= 0) {
+      toast.error("Ingresa el importe total de la compra.");
       return;
+    }
+
+    if (
+      !amountCents ||
+      amountCents <= 0 ||
+      amountCents > purchaseCents ||
+      amountCents > balanceCents
+    ) {
+      toast.error(
+        "El saldo a utilizar no puede superar la compra ni el saldo disponible.",
+      );
+      return;
+    }
+
+    if (!giftCardContractVerified || movementsError) {
+      toast.error("Canje bloqueado", {
+        description:
+          movementsError ||
+          "No se ha verificado el contrato PurchaseAmount del backend.",
+      });
+      return;
+    }
+
+    const amount = amountCents / 100;
+    let complementaryPayment = complementaryPaymentAttempt;
+
+    if (complementaryPaymentRequired && !complementaryPayment) {
+      if (!complementaryPaymentIsValid) {
+        toast.error(
+          "Confirma el cobro complementario y completa su método de pago.",
+        );
+        return;
+      }
+      complementaryPayment = {
+        confirmed: true,
+        method: complementaryPaymentMethod,
+        reference: complementaryPaymentReference.trim() || null,
+      };
+      setComplementaryPaymentAttempt(complementaryPayment);
     }
 
     setRedeemingGiftCard(true);
@@ -589,32 +937,52 @@ export default function ScannerPage() {
         sessionStorage.setItem(storageKey, idempotencyKey);
       }
 
+      const redeemRequest: GiftCardRedeemRequest = {
+        qrToken,
+        purchaseAmount: purchaseCents / 100,
+        amount,
+        idempotencyKey,
+        reference: giftCardReference.trim() || null,
+        notes: null,
+        ...(complementaryPaymentRequired && complementaryPayment
+          ? {
+              complementaryPaymentConfirmed: complementaryPayment.confirmed,
+              complementaryPaymentMethod: complementaryPayment.method,
+              complementaryPaymentReference: complementaryPayment.reference,
+            }
+          : {}),
+      };
+
       const response = await fetch("/api/gift-cards/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          qrToken,
-          amount,
-          idempotencyKey,
-          reference: giftCardReference.trim() || null,
-          notes: null,
-        }),
+        body: JSON.stringify(redeemRequest),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.message ?? "No fue posible confirmar el canje.");
+        throw new Error(
+          payload.message ?? "No fue posible confirmar el canje.",
+        );
       }
 
       const result = (payload.data ?? payload) as GiftCardRedeemResult;
       setGiftCardRedemption(result);
+      setGiftCardRedemptionPurchaseCents(
+        Math.round(Number(result.purchaseAmount ?? purchaseCents / 100) * 100),
+      );
       setGiftCard((current) =>
         current
-          ? { ...current, balance: result.balanceAfter ?? current.balance }
+          ? {
+              ...current,
+              currentBalance: result.balanceAfter ?? current.currentBalance,
+            }
           : current,
       );
-      setGiftCardAmount(String(result.balanceAfter ?? 0));
+      void loadGiftCardMovements(giftCard.id);
+      setGiftCardAmount("");
       setGiftCardDialogOpen(false);
       sessionStorage.removeItem(storageKey);
+      setComplementaryPaymentAttempt(null);
 
       const walletPending = result.warnings?.some((warning) =>
         warning.includes("WALLET_UPDATE_PENDING"),
@@ -1164,10 +1532,21 @@ export default function ScannerPage() {
   function resetScanner() {
     setCard(null);
     setGiftCard(null);
+    setMembership(null);
+    setGiftCardPurchaseAmount("");
     setGiftCardAmount("");
     setGiftCardReference("");
+    setComplementaryPaymentConfirmed(false);
+    setComplementaryPaymentMethod(1);
+    setComplementaryPaymentReference("");
+    setComplementaryPaymentAttempt(null);
     setGiftCardDialogOpen(false);
     setGiftCardRedemption(null);
+    setGiftCardRedemptionPurchaseCents(null);
+    setGiftCardMovements([]);
+    setMovementsError("");
+    setGiftCardContractVerified(false);
+    setGiftCardShare(null);
     setQrToken("");
     setPurchaseAmount("");
     setCashbackToRedeem("");
@@ -1180,28 +1559,28 @@ export default function ScannerPage() {
   return (
     <main
       className={`mx-auto min-h-full w-full max-w-[1652px] px-[clamp(20px,3vw,46px)] text-black ${
-        card || giftCard ? "pb-6 pt-4" : "pb-12 pt-8"
+        card || giftCard || membership ? "pb-6 pt-4" : "pb-8 pt-5"
       }`}
     >
-      {!card && !giftCard && (
-        <section className="mb-7">
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e11d48]">
-            Atención al cliente
-          </span>
-          <h1 className="mt-3 text-[clamp(34px,4vw,48px)] font-extrabold leading-none tracking-[-0.045em] text-black">
+      {!card && !giftCard && !membership && (
+        <section className="mx-auto mb-4 max-w-[640px] text-center">
+          <h1 className="mt-2 text-[clamp(32px,4vw,46px)] font-extrabold leading-none tracking-[-0.045em] text-black">
             Escanear tarjeta
           </h1>
-          <p className="mt-3 text-sm text-slate-500 sm:text-base">
-            Consulta el progreso, las compras y la información del cliente.
+          <p className="mt-2 text-sm text-slate-500 sm:text-base">
+            Centra el QR en la cámara o ingresa el código manualmente.
           </p>
         </section>
       )}
 
-      {!card && !giftCard && (
-        <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
+      {!card && !giftCard && !membership && (
+        <section
+          className="mx-auto w-full max-w-[640px]"
+          aria-label="Escáner de códigos QR"
+        >
           {cameraEnabled && (
-            <div className="flex flex-col items-center px-4 py-8 sm:px-8">
-              <div className="relative aspect-square w-full max-w-[520px] overflow-hidden rounded-[22px] border-4 border-[#111827] bg-black shadow-xl [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
+            <div className="flex flex-col items-center">
+              <div className="relative aspect-square w-full max-w-[620px] overflow-hidden rounded-[24px] bg-black shadow-[0_18px_45px_rgba(17,24,39,0.14)] sm:aspect-[4/3] [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
                 <Scanner
                   paused={loading}
                   formats={["qr_code"]}
@@ -1219,7 +1598,19 @@ export default function ScannerPage() {
                         "Revisa los permisos de cámara del navegador.",
                     });
                   }}
-                />
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0 z-10 grid place-items-center"
+                    aria-hidden="true"
+                  >
+                    <div className="relative aspect-square w-[70%] rounded-lg border-2 border-dashed border-white/35">
+                      <span className="absolute left-0 top-0 size-[15%] rounded-tl-lg border-l-4 border-t-4 border-[#E11D48]" />
+                      <span className="absolute right-0 top-0 size-[15%] rounded-tr-lg border-r-4 border-t-4 border-[#E11D48]" />
+                      <span className="absolute bottom-0 left-0 size-[15%] rounded-bl-lg border-b-4 border-l-4 border-[#E11D48]" />
+                      <span className="absolute bottom-0 right-0 size-[15%] rounded-br-lg border-b-4 border-r-4 border-[#E11D48]" />
+                    </div>
+                  </div>
+                </Scanner>
                 {loading && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/90 font-bold text-black backdrop-blur-sm">
                     <LoaderCircle className="size-8 animate-spin text-[#e11d48]" />
@@ -1230,7 +1621,7 @@ export default function ScannerPage() {
               <Button
                 type="button"
                 variant="ghost"
-                className="mt-4 font-bold text-slate-600"
+                className="mt-3 min-h-12 px-4 font-bold text-slate-600"
                 onClick={() => {
                   setCameraEnabled(false);
                   setManualMode(true);
@@ -1244,31 +1635,16 @@ export default function ScannerPage() {
 
           {manualMode && (
             <form
-              className="mx-auto flex min-h-[430px] w-full max-w-xl flex-col justify-center px-6 py-10"
+              className="mx-auto flex w-full max-w-[520px] flex-col rounded-[22px] border border-[#e5e7eb] bg-white px-5 py-6 shadow-[0_18px_45px_rgba(17,24,39,0.06)] sm:px-7 sm:py-7"
               onSubmit={submitManualToken}
             >
-              <Button
-                type="button"
-                variant="ghost"
-                className="mb-5 w-fit px-0 font-bold text-slate-500 hover:bg-transparent"
-                onClick={() => {
-                  setManualMode(false);
-                  setCameraEnabled(true);
-                }}
-              >
-                <ArrowLeft className="mr-2 size-4" />
-                Regresar
-              </Button>
-              <span className="grid size-14 place-items-center rounded-2xl bg-[#fff1f4] text-[#e11d48]">
-                <Keyboard size={27} />
-              </span>
-              <h2 className="mt-5 text-2xl font-extrabold tracking-[-0.03em] text-black">
+              <h2 className="text-2xl font-extrabold tracking-[-0.03em] text-black">
                 Introduce el código
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-1.5 text-sm text-slate-500">
                 Pega el token contenido en el QR de la tarjeta.
               </p>
-              <Label htmlFor="qrToken" className="mt-6 font-bold text-black">
+              <Label htmlFor="qrToken" className="mt-5 font-bold text-black">
                 Código de la tarjeta
               </Label>
               <Input
@@ -1282,7 +1658,7 @@ export default function ScannerPage() {
               />
               <Button
                 type="submit"
-                className="mt-4 h-[46px] rounded-[14px] bg-[#e11d48] font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
+                className="mt-4 h-12 w-full rounded-[14px] bg-[#e11d48] font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
                 disabled={loading}
               >
                 {loading ? (
@@ -1294,76 +1670,506 @@ export default function ScannerPage() {
               </Button>
             </form>
           )}
-        </Card>
+        </section>
+      )}
+
+      {membership && (
+        <SubscriptionScanPanel
+          membership={membership}
+          qrToken={qrToken}
+          onReset={resetScanner}
+        />
       )}
 
       {giftCard && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+        <div>
           <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-              <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-[#fff1f4] text-[#e11d48]"><Gift size={24} /></span>
-              <div className="min-w-0">
-                <small className="font-extrabold uppercase tracking-[0.13em] text-[#e11d48]">Gift Card encontrada</small>
-                <h2 className="truncate text-2xl font-extrabold tracking-[-0.035em] text-black">{giftCard.recipientName ?? "Destinatario"}</h2>
-                <p className="truncate text-sm text-slate-500">{giftCard.programName ?? "Tarjeta de regalo"}</p>
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-[#fff1f4] text-[#e11d48]">
+                  <Gift size={24} />
+                </span>
+                <div className="min-w-0">
+                  <small className="font-extrabold uppercase tracking-[0.13em] text-[#e11d48]">
+                    Gift Card encontrada
+                  </small>
+                  <h2 className="truncate text-xl font-extrabold tracking-[-0.035em] text-black sm:text-2xl">
+                    {giftCard.recipientName ?? "Destinatario"}
+                  </h2>
+                  <p className="truncate text-sm text-slate-500">
+                    {giftCard.programName ?? "Tarjeta de regalo"}
+                  </p>
+                </div>
               </div>
-              <Button type="button" variant="outline" className="ml-auto h-10 shrink-0 rounded-xl border-[#e5e7eb] bg-white px-3 font-extrabold shadow-sm sm:px-4" onClick={resetScanner}><RotateCcw className="size-4 sm:mr-2" /><span className="hidden sm:inline">Escanear otra</span></Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-12 shrink-0 px-3 font-bold text-slate-600"
+                onClick={resetScanner}
+              >
+                <QrCode className="mr-2 size-4" />
+                Escanear otra
+              </Button>
             </div>
 
-            <div className="p-5 sm:p-6">
-              <div className="rounded-[20px] bg-[#111827] p-5 text-white sm:p-6">
-                <small className="font-extrabold uppercase tracking-[0.14em] text-rose-300">Saldo disponible</small>
-                <strong className="mt-1 block text-4xl font-extrabold tracking-[-0.045em]">{formatMoney(giftCard.balance)}</strong>
+            <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+              <div className="rounded-[20px] bg-[#111827] p-5 text-white sm:p-6 lg:sticky lg:top-4">
+                <small className="font-extrabold uppercase tracking-[0.14em] text-rose-300">
+                  Saldo disponible
+                </small>
+                <strong className="mt-1 block text-4xl font-extrabold tracking-[-0.045em]">
+                  {formatMoney(giftCard.currentBalance)}
+                </strong>
                 <div className="mt-6 grid gap-3 border-t border-white/15 pt-5 sm:grid-cols-3">
-                  <div><small className="text-slate-400">Importe original</small><strong className="block">{formatMoney(giftCard.originalAmount ?? giftCard.amount)}</strong></div>
-                  <div><small className="text-slate-400">Estado</small><strong className="block">{{ 1: "Pago pendiente", 2: "Activa", 3: "Agotada", 4: "Vencida", 5: "Cancelada" }[giftCard.status ?? 0] ?? "No disponible"}</strong></div>
-                  <div><small className="text-slate-400">Vencimiento</small><strong className="block">{giftCard.expiresAtUtc ? formatDate(giftCard.expiresAtUtc) : "Sin vencimiento"}</strong></div>
+                  <div>
+                    <small className="text-slate-400">Importe original</small>
+                    <strong className="block">
+                      {formatMoney(giftCard.purchasedAmount)}
+                    </strong>
+                  </div>
+                  <div>
+                    <small className="text-slate-400">Estado</small>
+                    <strong className="block">
+                      {{
+                        1: "Pago pendiente",
+                        2: "Activa",
+                        3: "Agotada",
+                        4: "Vencida",
+                        5: "Cancelada",
+                      }[giftCard.status ?? 0] ?? "No disponible"}
+                    </strong>
+                  </div>
+                  <div>
+                    <small className="text-slate-400">Vencimiento</small>
+                    <strong className="block">
+                      {giftCard.expiresAtUtc
+                        ? formatDate(giftCard.expiresAtUtc)
+                        : "Sin vencimiento"}
+                    </strong>
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="gift-card-amount" className="font-bold">Importe a utilizar</Label>
-                  <Input id="gift-card-amount" type="number" min="0.01" max={giftCard.balance} step="0.01" inputMode="decimal" className="mt-2 h-12 rounded-xl" value={giftCardAmount} onChange={(event) => setGiftCardAmount(event.target.value)} />
-                  <Button type="button" variant="ghost" className="mt-1 h-8 px-0 text-sm font-bold text-[#e11d48]" onClick={() => setGiftCardAmount(String(giftCard.balance))}>Utilizar saldo completo</Button>
+                  <Label
+                    htmlFor="gift-card-purchase-amount"
+                    className="font-bold"
+                  >
+                    Importe total de la compra
+                  </Label>
+                  <Input
+                    id="gift-card-purchase-amount"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    className="mt-2 h-12 rounded-xl"
+                    value={giftCardPurchaseAmount}
+                    onChange={(event) =>
+                      updateGiftCardPurchaseAmount(event.target.value)
+                    }
+                    placeholder="0.00"
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="gift-card-reference" className="font-bold">Referencia opcional</Label>
-                  <Input id="gift-card-reference" className="mt-2 h-12 rounded-xl" maxLength={100} value={giftCardReference} onChange={(event) => setGiftCardReference(event.target.value)} placeholder="Ej. ticket-123" />
+                  <Label htmlFor="gift-card-amount" className="font-bold">
+                    Saldo Gift Card a utilizar
+                  </Label>
+                  <Input
+                    id="gift-card-amount"
+                    type="number"
+                    min="0.01"
+                    max={centsToInput(giftCardMaximumCents)}
+                    step="0.01"
+                    inputMode="decimal"
+                    className="mt-2 h-12 rounded-xl"
+                    value={giftCardAmount}
+                    onChange={(event) =>
+                      updateGiftCardAppliedAmount(event.target.value)
+                    }
+                    placeholder="0.00"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="mt-1 h-8 px-0 text-sm font-bold text-[#e11d48]"
+                    disabled={giftCardMaximumCents <= 0}
+                    onClick={() =>
+                      updateGiftCardAppliedAmount(
+                        centsToInput(giftCardMaximumCents),
+                      )
+                    }
+                  >
+                    Aplicar máximo disponible
+                  </Button>
+                </div>
+                <div>
+                  <Label htmlFor="gift-card-reference" className="font-bold">
+                    Referencia opcional
+                  </Label>
+                  <Input
+                    id="gift-card-reference"
+                    className="mt-2 h-12 rounded-xl"
+                    maxLength={100}
+                    value={giftCardReference}
+                    onChange={(event) =>
+                      setGiftCardReference(event.target.value)
+                    }
+                    placeholder="Ej. ticket-123"
+                  />
                 </div>
               </div>
 
-              <Button type="button" className="mt-4 h-12 rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white hover:bg-[#be123c]" disabled={redeemingGiftCard || giftCard.balance <= 0} onClick={() => {
-                const amount = Number(giftCardAmount);
-                if (!Number.isFinite(amount) || amount <= 0 || amount > giftCard.balance) {
-                  toast.error("Ingresa un importe positivo que no supere el saldo.");
-                  return;
+              <div
+                className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2"
+                aria-live="polite"
+              >
+                <div>
+                  <small className="font-bold text-slate-500">
+                    Total de compra
+                  </small>
+                  <strong className="block text-lg">
+                    {formatMoney(giftCardPurchaseCents / 100)}
+                  </strong>
+                </div>
+                <div>
+                  <small className="font-bold text-slate-500">
+                    Descuento desde Gift Card
+                  </small>
+                  <strong className="block text-lg text-[#e11d48]">
+                    −{formatMoney(giftCardAppliedCents / 100)}
+                  </strong>
+                </div>
+                <div>
+                  <small className="font-bold text-slate-500">
+                    Pendiente de cobrar
+                  </small>
+                  <strong className="block text-lg">
+                    {formatMoney(giftCardPendingCents / 100)}
+                  </strong>
+                </div>
+                <div>
+                  <small className="font-bold text-slate-500">
+                    Nuevo saldo Gift Card
+                  </small>
+                  <strong className="block text-lg">
+                    {formatMoney(giftCardNewBalanceCents / 100)}
+                  </strong>
+                </div>
+              </div>
+
+              {movementsLoading && (
+                <div
+                  className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700"
+                  role="status"
+                >
+                  Verificando contrato e historial antes de habilitar el canje…
+                </div>
+              )}
+              {movementsError && (
+                <div
+                  className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-950"
+                  role="alert"
+                >
+                  {movementsError}
+                </div>
+              )}
+
+              <label className="mt-4 grid max-w-sm gap-2 text-sm font-bold">
+                Sucursal activa
+                <select
+                  className="h-12 rounded-xl border border-slate-300 bg-white px-3"
+                  value={activeLocation.locationId}
+                  disabled={
+                    activeLocation.changing ||
+                    activeLocation.locations.length < 2
+                  }
+                  onChange={(event) =>
+                    void activeLocation.selectLocation(event.target.value)
+                  }
+                >
+                  <option value="">Selecciona una sucursal</option>
+                  {activeLocation.locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                type="button"
+                className="mt-4 h-12 w-full rounded-[14px] bg-[#e11d48] px-6 font-extrabold text-white shadow-[0_12px_26px_rgba(225,29,72,0.22)] hover:bg-[#be123c]"
+                disabled={
+                  redeemingGiftCard ||
+                  giftCard.status !== 2 ||
+                  giftCard.currentBalance <= 0 ||
+                  !activeLocation.locationId ||
+                  !giftCardAmountsAreValid ||
+                  !giftCardContractVerified ||
+                  movementsLoading ||
+                  Boolean(movementsError)
                 }
-                setGiftCardDialogOpen(true);
-              }}><Banknote className="mr-2 size-5" /> Confirmar canje</Button>
+                onClick={() => {
+                  if (!giftCardAmountsAreValid) {
+                    toast.error(
+                      "Revisa el total de compra y el saldo a utilizar.",
+                    );
+                    return;
+                  }
+                  setGiftCardDialogOpen(true);
+                }}
+              >
+                <Banknote className="mr-2 size-5" /> Confirmar canje
+              </Button>
 
-              {giftCardRedemption && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950" role="status"><strong className="flex items-center gap-2"><Check size={18} /> Canje confirmado</strong><div className="mt-3 grid gap-2 text-sm sm:grid-cols-4"><span>Utilizado <b>{formatMoney(giftCardRedemption.amount ?? ((giftCardRedemption.balanceBefore ?? 0) - (giftCardRedemption.balanceAfter ?? 0)))}</b></span><span>Saldo anterior <b>{formatMoney(giftCardRedemption.balanceBefore)}</b></span><span>Saldo restante <b>{formatMoney(giftCardRedemption.balanceAfter)}</b></span><span>Operación <b className="break-all">{giftCardRedemption.operationId ?? "Confirmada"}</b></span></div></div>}
+              {giftCardRedemption && (
+                <div
+                  className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"
+                  role="status"
+                >
+                  <strong className="flex items-center gap-2">
+                    <Check size={18} /> Canje confirmado
+                  </strong>
+                  <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                    <span>
+                      Utilizado{" "}
+                      <b>{formatMoney(giftCardRedeemedCents / 100)}</b>
+                    </span>
+                    <span>
+                      Saldo anterior{" "}
+                      <b>{formatMoney(giftCardRedemption.balanceBefore)}</b>
+                    </span>
+                    <span>
+                      Saldo restante{" "}
+                      <b>{formatMoney(giftCardRedemption.balanceAfter)}</b>
+                    </span>
+                    <span>
+                      Compra total{" "}
+                      <b>
+                        {formatMoney(
+                          (giftCardRedemptionPurchaseCents ?? 0) / 100,
+                        )}
+                      </b>
+                    </span>
+                    <span>
+                      Diferencia{" "}
+                      <b>
+                        {formatMoney(giftCardRedemptionRemainingCents / 100)}
+                      </b>
+                    </span>
+                    <span>
+                      Operación{" "}
+                      <b className="break-all">
+                        {giftCardRedemption.operationId ?? "Confirmada"}
+                      </b>
+                    </span>
+                  </div>
+                  {complementaryPaymentSummary(giftCardRedemption) && (
+                    <p className="mt-3 text-sm font-bold">
+                      {complementaryPaymentSummary(giftCardRedemption)}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="mt-6 border-t border-slate-200 pt-5">
+                <h3 className="font-extrabold">Historial</h3>
+                {movementsLoading ? (
+                  <LoaderCircle className="mt-3 animate-spin text-rose-600" />
+                ) : movementsError ? (
+                  <div
+                    className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-950"
+                    role="alert"
+                  >
+                    {movementsError}
+                  </div>
+                ) : giftCardMovements.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Aún no hay movimientos disponibles.
+                  </p>
+                ) : (
+                  <div className="mt-3 grid max-h-[360px] gap-2 overflow-y-auto overscroll-contain pr-1">
+                    {giftCardMovements.map((movement, index) => {
+                      const movementPurchaseCents = Math.round(
+                        Number(movement.purchaseAmount ?? 0) * 100,
+                      );
+                      const movementAmountCents = Math.round(
+                        Number(movement.amount ?? 0) * 100,
+                      );
+                      const paymentSummary =
+                        complementaryPaymentSummary(movement);
+                      return (
+                        <div
+                          key={movement.operationId ?? index}
+                          className="flex flex-wrap justify-between gap-2 rounded-xl bg-slate-50 p-3 text-sm"
+                        >
+                          <div>
+                            <strong>
+                              {movement.movementType === 1
+                                ? "Venta"
+                                : movement.movementType === 2
+                                  ? "Canje"
+                                  : "Movimiento"}
+                            </strong>
+                            <p className="text-slate-500">
+                              {formatDate(movement.createdAtUtc)}
+                              {movement.reference
+                                ? ` · ${movement.reference}`
+                                : ""}
+                            </p>
+                            {movement.purchaseAmount != null && (
+                              <p className="text-slate-500">
+                                Compra{" "}
+                                {formatMoney(movementPurchaseCents / 100)} ·
+                                Diferencia{" "}
+                                {formatMoney(
+                                  Math.max(
+                                    movementPurchaseCents - movementAmountCents,
+                                    0,
+                                  ) / 100,
+                                )}
+                              </p>
+                            )}
+                            {paymentSummary && (
+                              <p className="font-semibold text-slate-700">
+                                {paymentSummary}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <strong>{formatMoney(movement.amount)}</strong>
+                            <p className="text-slate-500">
+                              Saldo {formatMoney(movement.balanceAfter)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              </div>
             </div>
-          </Card>
-
-          <Card className="h-fit rounded-[18px] border-[#e5e7eb] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.045)]">
-            <h3 className="text-lg font-extrabold tracking-[-0.025em] text-black">Canje seguro</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">La validación local no sustituye al servidor. El saldo sólo cambia después de recibir una respuesta confirmada.</p>
           </Card>
         </div>
       )}
 
-      <AlertDialog open={giftCardDialogOpen} onOpenChange={(open) => !redeemingGiftCard && setGiftCardDialogOpen(open)}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Confirmar canje de Gift Card</AlertDialogTitle><AlertDialogDescription>Se descontarán {formatMoney(Number(giftCardAmount))} del saldo de {giftCard?.recipientName ?? "la tarjeta"}. Verifica el importe antes de continuar.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={redeemingGiftCard}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={redeemingGiftCard} onClick={(event) => { event.preventDefault(); void redeemGiftCard(); }}>{redeemingGiftCard ? "Canjeando…" : "Sí, descontar saldo"}</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <FidaraConfirmDialog
+        open={giftCardDialogOpen}
+        onOpenChange={setGiftCardDialogOpen}
+        title="Confirmar canje de Gift Card"
+        description={
+          complementaryPaymentRequired
+            ? "Confirma el canje únicamente después de recibir la diferencia indicada. El servidor registrará el cobro complementario en el mismo movimiento."
+            : "Verifica los importes antes de descontar el saldo de la Gift Card."
+        }
+        confirmLabel="Sí, descontar saldo"
+        busyLabel="Canjeando…"
+        busy={redeemingGiftCard}
+        confirmDisabled={
+          !giftCardContractVerified ||
+          Boolean(movementsError) ||
+          !complementaryPaymentIsValid
+        }
+        onConfirm={() => void redeemGiftCard()}
+      >
+        <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+          <div>
+            <small className="font-bold text-slate-500">
+              Importe total de compra
+            </small>
+            <strong className="block text-lg">
+              {formatMoney(giftCardPurchaseCents / 100)}
+            </strong>
+          </div>
+          <div>
+            <small className="font-bold text-slate-500">
+              Saldo Gift Card a utilizar
+            </small>
+            <strong className="block text-lg text-[#E11D48]">
+              {formatMoney(giftCardAppliedCents / 100)}
+            </strong>
+          </div>
+          <div>
+            <small className="font-bold text-slate-500">
+              Diferencia por cobrar
+            </small>
+            <strong className="block text-lg">
+              {formatMoney(giftCardPendingCents / 100)}
+            </strong>
+          </div>
+          <div>
+            <small className="font-bold text-slate-500">Nuevo saldo</small>
+            <strong className="block text-lg">
+              {formatMoney(giftCardNewBalanceCents / 100)}
+            </strong>
+          </div>
+        </div>
+        {complementaryPaymentRequired && (
+          <div className="mt-4 grid gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <label className="flex items-start gap-3 text-sm font-bold text-amber-950">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[#E11D48]"
+                checked={complementaryPaymentConfirmed}
+                disabled={
+                  redeemingGiftCard || Boolean(complementaryPaymentAttempt)
+                }
+                onChange={(event) =>
+                  setComplementaryPaymentConfirmed(event.target.checked)
+                }
+              />
+              Confirmo que recibí {formatMoney(giftCardPendingCents / 100)} de
+              pago complementario.
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-[#111827]">
+              Método de pago
+              <select
+                className="h-12 rounded-xl border border-slate-300 bg-white px-3"
+                value={complementaryPaymentMethod}
+                disabled={
+                  redeemingGiftCard || Boolean(complementaryPaymentAttempt)
+                }
+                onChange={(event) =>
+                  setComplementaryPaymentMethod(Number(event.target.value))
+                }
+              >
+                <option value={1}>Efectivo</option>
+                <option value={2}>Tarjeta</option>
+                <option value={3}>Transferencia</option>
+              </select>
+            </label>
+            {(complementaryPaymentMethod === 2 ||
+              complementaryPaymentMethod === 3) && (
+              <label className="grid gap-2 text-sm font-bold text-[#111827]">
+                Referencia del pago complementario
+                <Input
+                  maxLength={150}
+                  value={complementaryPaymentReference}
+                  disabled={
+                    redeemingGiftCard || Boolean(complementaryPaymentAttempt)
+                  }
+                  onChange={(event) =>
+                    setComplementaryPaymentReference(event.target.value)
+                  }
+                />
+              </label>
+            )}
+          </div>
+        )}
+        {movementsError && (
+          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-950">
+            {movementsError}
+          </div>
+        )}
+      </FidaraConfirmDialog>
 
       {card && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
+        <div className="space-y-4">
           <Card className="overflow-hidden rounded-[22px] border-[#e5e7eb] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[#fff1f4] text-[#e11d48]">
                 {brandLogoUrl ? (
                   // La API puede servir logos desde un dominio dinámico.
@@ -1381,27 +2187,28 @@ export default function ScannerPage() {
                 <small className="font-extrabold uppercase tracking-[0.13em] text-[#e11d48]">
                   Cliente encontrado
                 </small>
-                <h2 className="truncate text-2xl font-extrabold tracking-[-0.035em] text-black">
+                <h2 className="truncate text-xl font-extrabold tracking-[-0.035em] text-black sm:text-2xl">
                   {card.customer.name}
                 </h2>
                 <p className="truncate text-sm text-slate-500">
                   {card.program.name} · {card.cardNumber}
                 </p>
               </div>
-
+              </div>
               <Button
                 type="button"
-                variant="outline"
-                className="ml-auto h-10 shrink-0 rounded-xl border-[#e5e7eb] bg-white px-3 font-extrabold shadow-sm sm:px-4"
+                variant="ghost"
+                className="min-h-12 shrink-0 px-3 font-bold text-slate-600"
                 onClick={resetScanner}
               >
-                <RotateCcw className="size-4 sm:mr-2" />
-                <span className="hidden sm:inline">Escanear otra</span>
+                <QrCode className="mr-2 size-4" />
+                Escanear otra
               </Button>
             </div>
 
-            <div className="px-5 py-5 sm:px-6">
-              {isCashbackProgram ? (
+            <div className="grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+              <div className="min-w-0 lg:sticky lg:top-4">
+                {isCashbackProgram ? (
                 <div className="relative overflow-hidden rounded-[20px] border border-[#E5E7EB] bg-white">
                   <div
                     className="pointer-events-none absolute -right-16 -top-20 size-52 rounded-full bg-[#E11D48]/[0.07] blur-2xl"
@@ -1758,10 +2565,12 @@ export default function ScannerPage() {
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="min-w-0">
               {(!card.rewardAvailable ||
                 isPointsProgram ||
                 isCouponProgram) && (
-                <div className="mt-5">
+                <div className="mt-5 lg:mt-0">
                   <Label
                     htmlFor="purchaseAmount"
                     className="font-bold text-black"
@@ -2082,7 +2891,7 @@ export default function ScannerPage() {
                 </div>
               )}
 
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="mt-5 flex flex-wrap gap-3 [&>button]:min-h-12 [&>button]:w-full sm:[&>button]:w-auto">
                 {!isCashbackProgram &&
                   !isCouponProgram &&
                   card.rewardAvailable && (
@@ -2186,15 +2995,16 @@ export default function ScannerPage() {
                     </Button>
                   )}
               </div>
+              </div>
             </div>
           </Card>
 
-          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2">
             <Card className="rounded-[18px] border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.045)] sm:p-5">
               <h3 className="text-lg font-extrabold tracking-[-0.025em] text-black">
                 Información del cliente
               </h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <InfoRow
                   icon={<Mail size={17} />}
                   label="Correo"
@@ -2288,7 +3098,7 @@ export default function ScannerPage() {
                   }
                 />
               </div>
-              <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
                 <InfoRow
                   icon={<CreditCard size={17} />}
                   label="Número de tarjeta"
