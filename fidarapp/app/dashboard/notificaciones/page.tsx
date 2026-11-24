@@ -18,9 +18,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatDateTime } from "@/components/lib/date-time";
 import { GeoPushPanel } from "@/components/marketing/geo-push-panel";
+import type { CreateNotificationCampaignRequest, NotificationAudience } from "@/lib/notifications";
 import pageStyles from "../clientes/customers.module.css";
 
-type Audience = "all" | "location";
+type Audience = NotificationAudience;
 type CampaignStatus =
   | "queued"
   | "processing"
@@ -32,11 +33,25 @@ type CampaignProgram = {
   id: string;
   name: string;
   isActive?: boolean;
+  programType?: number;
   cardLogoUrl?: string | null;
+  logoUrl?: string | null;
+  installedCards?: number;
+  availableRecipientCount?: number;
+};
+
+type CampaignLocation = {
+  id: string;
+  name: string;
+  isActive?: boolean;
+  availableRecipientCount?: number;
 };
 
 type Campaign = {
   id: string;
+  programId?: string | null;
+  programName?: string | null;
+  programType?: number | null;
   title: string;
   message: string;
   audience: Audience;
@@ -60,8 +75,22 @@ type ApiEnvelope<T> = {
   data?: T;
 };
 
+const GUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function parseCount(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function programTypeLabel(programType?: number | null) {
+  return {
+    1: "Sellos",
+    2: "Puntos",
+    3: "Cashback",
+    4: "Cupones",
+    5: "Gift Cards",
+    6: "Suscripciones",
+  }[programType ?? 0] ?? "Tipo no identificado";
 }
 
 function normalizeCampaign(campaign: Campaign): Campaign {
@@ -106,6 +135,12 @@ export default function NotificationsPage() {
   const [programId, setProgramId] = useState("");
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [programError, setProgramError] = useState("");
+  const [locations, setLocations] = useState<CampaignLocation[]>([]);
+  const [locationId, setLocationId] = useState("");
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [audience, setAudience] = useState<Audience>("all");
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -114,7 +149,11 @@ export default function NotificationsPage() {
   const [error, setError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [step, setStep] = useState<"configure" | "review">("configure");
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const [uncertainSubmission, setUncertainSubmission] = useState(false);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const submissionInFlight = useRef(false);
 
   const goToLogin = useCallback(() => {
     sessionStorage.removeItem("fidara_session");
@@ -152,30 +191,7 @@ export default function NotificationsPage() {
     }
   }, [goToLogin]);
 
-  useEffect(() => {
-    const rawSession = sessionStorage.getItem("fidara_session");
-    if (rawSession) {
-      try {
-        const session = JSON.parse(rawSession) as { organizationName?: string };
-        if (session.organizationName?.trim()) setOrganizationName(session.organizationName.trim());
-      } catch {
-        // La API sigue siendo la fuente de datos de la página.
-      }
-    }
-    void loadData(true);
-  }, [loadData]);
-
-  const hasActiveCampaign = campaigns.some(
-    (campaign) => campaign.status === "queued" || campaign.status === "processing",
-  );
-
-  useEffect(() => {
-    if (!hasActiveCampaign) return;
-    const interval = window.setInterval(() => void loadData(false), 4000);
-    return () => window.clearInterval(interval);
-  }, [hasActiveCampaign, loadData]);
-
-  async function loadPrograms() {
+  const loadPrograms = useCallback(async () => {
     setLoadingPrograms(true);
     setProgramError("");
 
@@ -191,13 +207,71 @@ export default function NotificationsPage() {
         throw new Error(payload.message ?? "No fue posible cargar los programas.");
       }
 
-      const activePrograms = payload.data.filter((program) => program.isActive !== false);
-      setPrograms(activePrograms);
-      setProgramId((current) => activePrograms.some((program) => program.id === current) ? current : "");
+      const validPrograms = payload.data.filter(
+        (program) => GUID_PATTERN.test(program.id) && Boolean(program.name?.trim()),
+      );
+      const eligiblePrograms = validPrograms.filter((program) => program.isActive !== false);
+      setPrograms(validPrograms);
+      setProgramId((current) => eligiblePrograms.some((program) => program.id === current) ? current : "");
     } catch (caught) {
       setProgramError(caught instanceof Error ? caught.message : "No fue posible cargar los programas.");
     } finally {
       setLoadingPrograms(false);
+    }
+  }, [goToLogin]);
+
+  useEffect(() => {
+    const rawSession = sessionStorage.getItem("fidara_session");
+    if (rawSession) {
+      try {
+        const session = JSON.parse(rawSession) as { organizationName?: string };
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Sincroniza el nombre persistido al hidratar el cliente.
+        if (session.organizationName?.trim()) setOrganizationName(session.organizationName.trim());
+      } catch {
+        // La API sigue siendo la fuente de datos de la página.
+      }
+    }
+    void Promise.all([loadData(true), loadPrograms()]);
+  }, [loadData, loadPrograms]);
+
+  const hasActiveCampaign = campaigns.some(
+    (campaign) => campaign.status === "queued" || campaign.status === "processing",
+  );
+
+  useEffect(() => {
+    if (!hasActiveCampaign) return;
+    const interval = window.setInterval(() => void loadData(false), 4000);
+    return () => window.clearInterval(interval);
+  }, [hasActiveCampaign, loadData]);
+
+  async function loadLocations() {
+    setLoadingLocations(true);
+    setLocationError("");
+
+    try {
+      const response = await fetch("/api/locations?activeOnly=true", { cache: "no-store" });
+      if (response.status === 401) {
+        goToLogin();
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<CampaignLocation[]>;
+      if (!response.ok || payload.success === false || !Array.isArray(payload.data)) {
+        throw new Error(payload.message ?? "No fue posible cargar las sucursales.");
+      }
+
+      const activeLocations = payload.data.filter(
+        (location) =>
+          location.isActive !== false &&
+          GUID_PATTERN.test(location.id) &&
+          Boolean(location.name?.trim()),
+      );
+      setLocations(activeLocations);
+      setLocationId((current) => activeLocations.some((location) => location.id === current) ? current : "");
+    } catch (caught) {
+      setLocationError(caught instanceof Error ? caught.message : "No fue posible cargar las sucursales.");
+    } finally {
+      setLoadingLocations(false);
     }
   }
 
@@ -205,7 +279,15 @@ export default function NotificationsPage() {
     setComposerOpen(open);
     if (open) {
       setStep("configure");
-      if (!loadingPrograms) void loadPrograms();
+      setProgramId("");
+      setAudience("all");
+      setLocationId("");
+      setTitle("");
+      setMessage("");
+      setSubmissionError("");
+      setUncertainSubmission(false);
+      setIdempotencyKey(crypto.randomUUID());
+      void Promise.all([loadPrograms(), loadLocations()]);
     }
   }
 
@@ -214,7 +296,73 @@ export default function NotificationsPage() {
   }, [composerOpen, step]);
 
   const selectedProgram = programs.find((program) => program.id === programId);
-  const canReview = Boolean(selectedProgram && title.trim() && message.trim() && !loadingPrograms && !programError);
+  const eligiblePrograms = programs.filter((program) => program.isActive !== false);
+  const selectedLocation = locations.find((location) => location.id === locationId);
+  const availableRecipients = audience === "all"
+    ? selectedProgram?.availableRecipientCount ?? selectedProgram?.installedCards
+    : selectedLocation?.availableRecipientCount;
+  const canReview = Boolean(
+    selectedProgram &&
+    title.trim() &&
+    message.trim() &&
+    !loadingPrograms &&
+    !programError &&
+    (audience === "all" || (selectedLocation && !loadingLocations && !locationError)),
+  );
+
+  async function submitCampaign() {
+    if (!canReview || !idempotencyKey || submissionInFlight.current) return;
+
+    const campaignRequest: CreateNotificationCampaignRequest = {
+      programId,
+      idempotencyKey,
+      audience,
+      locationId: audience === "location" ? locationId : null,
+      title: title.trim(),
+      message: message.trim(),
+    };
+
+    submissionInFlight.current = true;
+    setSubmitting(true);
+    setSubmissionError("");
+
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(campaignRequest),
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<Campaign>;
+
+      if (response.status === 401) {
+        goToLogin();
+        return;
+      }
+      if (!response.ok || payload.success === false) {
+        const uncertain =
+          (response.status === 408 || response.status === 429 || response.status >= 500);
+        setUncertainSubmission(uncertain);
+        throw new Error(
+          uncertain
+            ? `${payload.message ?? "No fue posible confirmar el resultado."} No se reenviará automáticamente; puedes reintentar con la misma clave.`
+            : payload.message ?? "No fue posible crear la campaña.",
+        );
+      }
+
+      setComposerOpen(false);
+      await loadData(false);
+    } catch (caught) {
+      if (!(caught instanceof Error) || caught instanceof TypeError) {
+        setUncertainSubmission(true);
+        setSubmissionError("No se pudo confirmar el resultado. No se reenviará automáticamente; puedes reintentar con la misma clave.");
+      } else {
+        setSubmissionError(caught.message);
+      }
+    } finally {
+      submissionInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
 
   const metrics = useMemo(() => {
     const sent = campaigns.reduce((total, campaign) => total + campaign.sentCount, 0);
@@ -309,6 +457,7 @@ export default function NotificationsPage() {
             <CampaignHistory
               heading="Campañas recientes"
               campaigns={campaigns.slice(0, 5)}
+              programs={programs}
               loading={loading}
               hasActiveCampaign={hasActiveCampaign}
             />
@@ -322,6 +471,7 @@ export default function NotificationsPage() {
             <CampaignHistory
               heading="Historial de campañas"
               campaigns={campaigns}
+              programs={programs}
               loading={loading}
               hasActiveCampaign={hasActiveCampaign}
             />
@@ -357,17 +507,17 @@ export default function NotificationsPage() {
               {step === "configure" ? (
                 <>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-extrabold">Programa para la vista previa</span>
+                    <span className="mb-2 block text-xs font-extrabold">Programa</span>
                     <select
                       value={programId}
                       onChange={(event) => setProgramId(event.target.value)}
-                      disabled={loadingPrograms || Boolean(programError) || programs.length === 0}
+                      disabled={loadingPrograms || Boolean(programError) || eligiblePrograms.length === 0}
                       className={"h-11 truncate disabled:bg-[#F3F4F6] " + campaignField}
                     >
                       <option value="">
-                        {loadingPrograms ? "Cargando programas…" : programs.length ? "Selecciona un programa" : "Sin programas disponibles"}
+                        {loadingPrograms ? "Cargando programas…" : eligiblePrograms.length ? "Selecciona un programa" : "Sin programas disponibles"}
                       </option>
-                      {programs.map((program) => (
+                      {eligiblePrograms.map((program) => (
                         <option key={program.id} value={program.id}>{program.name}</option>
                       ))}
                     </select>
@@ -376,6 +526,58 @@ export default function NotificationsPage() {
                     <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 p-3 text-xs text-[#881337] [overflow-wrap:anywhere]">
                       <span>{programError}</span>
                       <button type="button" onClick={() => void loadPrograms()} className="font-extrabold underline">
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+
+                  <fieldset>
+                    <legend className="mb-2 text-xs font-extrabold">Audiencia</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {([
+                        { value: "all", label: "Todos", description: "Todas las tarjetas del programa" },
+                        { value: "location", label: "Por sucursal", description: "Solo una sucursal del programa" },
+                      ] as const).map((option) => (
+                        <label key={option.value} className="flex cursor-pointer gap-3 rounded-xl border border-[#E5E7EB] p-3 has-checked:border-[#E11D48] has-checked:bg-rose-50">
+                          <input
+                            type="radio"
+                            name="campaign-audience"
+                            value={option.value}
+                            checked={audience === option.value}
+                            onChange={() => setAudience(option.value)}
+                            className="mt-0.5 accent-[#E11D48]"
+                          />
+                          <span>
+                            <strong className="block text-sm">{option.label}</strong>
+                            <small className="text-[#6B7280]">{option.description}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {audience === "location" && (
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-extrabold">Sucursal</span>
+                      <select
+                        value={locationId}
+                        onChange={(event) => setLocationId(event.target.value)}
+                        disabled={loadingLocations || Boolean(locationError) || locations.length === 0}
+                        className={"h-11 truncate disabled:bg-[#F3F4F6] " + campaignField}
+                      >
+                        <option value="">
+                          {loadingLocations ? "Cargando sucursales…" : locations.length ? "Selecciona una sucursal" : "Sin sucursales disponibles"}
+                        </option>
+                        {locations.map((location) => (
+                          <option key={location.id} value={location.id}>{location.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {audience === "location" && locationError && (
+                    <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 p-3 text-xs text-[#881337] [overflow-wrap:anywhere]">
+                      <span>{locationError}</span>
+                      <button type="button" onClick={() => void loadLocations()} className="font-extrabold underline">
                         Reintentar
                       </button>
                     </div>
@@ -408,25 +610,48 @@ export default function NotificationsPage() {
                   </label>
                 </>
               ) : (
-                <dl className="rounded-xl border border-[#E5E7EB] p-3 text-sm [overflow-wrap:anywhere]">
-                  <dt className="text-xs font-bold text-[#6B7280]">Programa de la vista previa</dt>
-                  <dd className="mt-1 font-extrabold">{selectedProgram?.name}</dd>
+                <dl className="grid gap-3 rounded-xl border border-[#E5E7EB] p-3 text-sm [overflow-wrap:anywhere] sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-bold text-[#6B7280]">Programa</dt>
+                    <dd className="mt-1 font-extrabold">{selectedProgram?.name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-bold text-[#6B7280]">Audiencia</dt>
+                    <dd className="mt-1 font-extrabold">{audience === "all" ? "Todos" : selectedLocation?.name}</dd>
+                  </div>
+                  {typeof availableRecipients === "number" && (
+                    <div>
+                      <dt className="text-xs font-bold text-[#6B7280]">Destinatarios disponibles</dt>
+                      <dd className="mt-1 font-extrabold">{availableRecipients}</dd>
+                    </div>
+                  )}
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-bold text-[#6B7280]">Título</dt>
+                    <dd className="mt-1 font-extrabold">{title.trim()}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-bold text-[#6B7280]">Mensaje</dt>
+                    <dd className="mt-1 whitespace-pre-wrap">{message.trim()}</dd>
+                  </div>
                 </dl>
               )}
 
-              <div id="campaign-audience-note" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-950">
-                <h2 className="font-extrabold">Envío por programa no disponible</h2>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-5 text-emerald-950">
+                <h2 className="font-extrabold">Segmentación por programa</h2>
                 <p className="mt-1">
-                  La API de campañas aún no ofrece un filtro por programa confirmado. Las opciones anteriores
-                  de todos los clientes o por sucursal podían abarcar varios programas. El programa de arriba
-                  solo configura la vista previa.
+                  La campaña se enviará únicamente a la audiencia del programa seleccionado.
                 </p>
               </div>
+              {submissionError && (
+                <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+                  {submissionError}
+                </div>
+              )}
             </div>
 
             <CampaignPreview
-              organizationName={organizationName}
-              logoUrl={selectedProgram?.cardLogoUrl}
+              organizationName={selectedProgram?.name ?? organizationName}
+              logoUrl={selectedProgram?.cardLogoUrl ?? selectedProgram?.logoUrl}
               title={title}
               message={message}
             />
@@ -446,14 +671,20 @@ export default function NotificationsPage() {
               <>
                 <button
                   type="button"
+                  disabled={uncertainSubmission || submitting}
                   onClick={() => setStep("configure")}
                   className="min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold hover:bg-[#F3F4F6] focus-visible:outline-2 focus-visible:outline-[#E11D48] sm:w-auto"
                 >
                   Volver a configurar
                 </button>
-                <button type="button" disabled aria-describedby="campaign-audience-note" className={campaignPrimaryAction}>
-                  <Send size={17} aria-hidden="true" />
-                  Confirmar envío
+                <button
+                  type="button"
+                  disabled={!canReview || submitting}
+                  onClick={() => void submitCampaign()}
+                  className={campaignPrimaryAction}
+                >
+                  {submitting ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Send size={17} aria-hidden="true" />}
+                  {uncertainSubmission ? "Reintentar con la misma clave" : "Confirmar envío"}
                 </button>
               </>
             )}
@@ -515,11 +746,13 @@ function CampaignPreview({
 function CampaignHistory({
   heading,
   campaigns,
+  programs,
   loading,
   hasActiveCampaign,
 }: {
   heading: string;
   campaigns: Campaign[];
+  programs: CampaignProgram[];
   loading: boolean;
   hasActiveCampaign: boolean;
 }) {
@@ -547,11 +780,22 @@ function CampaignHistory({
         </div>
       ) : (
         <ul className="divide-y divide-[#E5E7EB]">
-          {campaigns.map((campaign) => (
+          {campaigns.map((campaign) => {
+            const program = campaign.programId
+              ? programs.find((item) => item.id === campaign.programId)
+              : undefined;
+            const programName = campaign.programName?.trim() || program?.name;
+            const programType = campaign.programType ?? program?.programType;
+
+            return (
             <li key={campaign.id} className="grid min-w-0 items-start gap-2 px-4 py-4 sm:px-5 @min-[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] @min-[50rem]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_minmax(0,1fr)] @min-[50rem]:items-center @min-[50rem]:gap-4">
               <div className="min-w-0 [overflow-wrap:anywhere]">
                 <strong className="block text-sm font-extrabold">{campaign.title}</strong>
                 <p className="mt-1 text-xs leading-5 text-[#6B7280]">{campaign.message}</p>
+                <p className="mt-1 text-xs font-bold text-[#4B5563]">
+                  {programName ?? "Programa no identificado"}
+                  {programName && ` · ${programTypeLabel(programType)}`}
+                </p>
                 <time dateTime={campaign.createdAt} className="mt-1 block text-[11px] text-[#6B7280]">
                   {formatDateTime(campaign.createdAt)}
                 </time>
@@ -573,7 +817,8 @@ function CampaignHistory({
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
