@@ -1,31 +1,24 @@
 "use client";
-import {
-  formatDate,
-} from "@/components/lib/date-time";
+import { Dialog } from "@base-ui/react/dialog";
+import { Tabs } from "@base-ui/react/tabs";
 import {
   AlertTriangle,
   Bell,
   CheckCircle2,
-  Clock3,
   LoaderCircle,
   MapPin,
   Megaphone,
   RefreshCw,
+  Plus,
   Send,
-  Smartphone,
   Users,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  GeoPushPanel,
-} from "@/components/marketing/geo-push-panel";
-
-import {
-  formatDateTime,
-} from "@/components/lib/date-time";
+import { formatDateTime } from "@/components/lib/date-time";
+import { GeoPushPanel } from "@/components/marketing/geo-push-panel";
+import pageStyles from "../clientes/customers.module.css";
 
 type Audience = "all" | "location";
 type CampaignStatus =
@@ -35,10 +28,11 @@ type CampaignStatus =
   | "partial"
   | "failed";
 
-type Location = {
+type CampaignProgram = {
   id: string;
   name: string;
   isActive?: boolean;
+  cardLogoUrl?: string | null;
 };
 
 type Campaign = {
@@ -65,14 +59,6 @@ type ApiEnvelope<T> = {
   message?: string;
   data?: T;
 };
-
-const dateFormatter = new Intl.DateTimeFormat("es-MX", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
 
 function parseCount(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -116,17 +102,19 @@ function StatusBadge({ status }: { status: CampaignStatus }) {
 
 export default function NotificationsPage() {
   const [organizationName, setOrganizationName] = useState("Fidara");
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [programs, setPrograms] = useState<CampaignProgram[]>([]);
+  const [programId, setProgramId] = useState("");
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+  const [programError, setProgramError] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [audience, setAudience] = useState<Audience>("all");
-  const [locationId, setLocationId] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [step, setStep] = useState<"configure" | "review">("configure");
+  const stepHeading = useRef<HTMLHeadingElement>(null);
 
   const goToLogin = useCallback(() => {
     sessionStorage.removeItem("fidara_session");
@@ -138,36 +126,23 @@ export default function NotificationsPage() {
     else setRefreshing(true);
 
     try {
-      const [campaignResponse, locationResponse] = await Promise.all([
-        fetch("/api/notifications?page=1&pageSize=50", { cache: "no-store" }),
-        fetch("/api/locations?activeOnly=true", { cache: "no-store" }),
-      ]);
+      const campaignResponse = await fetch("/api/notifications?page=1&pageSize=50", { cache: "no-store" });
 
-      if (campaignResponse.status === 401 || locationResponse.status === 401) {
+      if (campaignResponse.status === 401) {
         goToLogin();
         return;
       }
 
       const campaignPayload = (await campaignResponse.json().catch(() => ({}))) as ApiEnvelope<Campaign[]>;
-      const locationPayload = (await locationResponse.json().catch(() => ({}))) as ApiEnvelope<Location[]>;
 
       if (!campaignResponse.ok) {
         throw new Error(campaignPayload.message ?? "No fue posible cargar las campañas.");
-      }
-      if (!locationResponse.ok) {
-        throw new Error(locationPayload.message ?? "No fue posible cargar las sucursales.");
       }
 
       const nextCampaigns = Array.isArray(campaignPayload.data)
         ? campaignPayload.data.map(normalizeCampaign)
         : [];
-      const nextLocations = Array.isArray(locationPayload.data)
-        ? locationPayload.data.filter((location) => location.isActive !== false)
-        : [];
-
       setCampaigns(nextCampaigns);
-      setLocations(nextLocations);
-      setLocationId((current) => current || nextLocations[0]?.id || "");
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Ocurrió un error inesperado.");
@@ -200,21 +175,46 @@ export default function NotificationsPage() {
     return () => window.clearInterval(interval);
   }, [hasActiveCampaign, loadData]);
 
-  useEffect(() => {
-    if (!confirmationOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [confirmationOpen]);
+  async function loadPrograms() {
+    setLoadingPrograms(true);
+    setProgramError("");
 
-  const selectedLocation = useMemo(
-    () => locations.find((location) => location.id === locationId),
-    [locationId, locations],
-  );
-  const audienceLabel = audience === "all" ? "Todos los clientes" : selectedLocation?.name ?? "Sucursal";
-  const canSend = title.trim().length > 0 && message.trim().length > 0 && (audience === "all" || Boolean(locationId));
+    try {
+      const response = await fetch("/api/programs", { cache: "no-store" });
+      if (response.status === 401) {
+        goToLogin();
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<CampaignProgram[]>;
+      if (!response.ok || payload.success === false || !Array.isArray(payload.data)) {
+        throw new Error(payload.message ?? "No fue posible cargar los programas.");
+      }
+
+      const activePrograms = payload.data.filter((program) => program.isActive !== false);
+      setPrograms(activePrograms);
+      setProgramId((current) => activePrograms.some((program) => program.id === current) ? current : "");
+    } catch (caught) {
+      setProgramError(caught instanceof Error ? caught.message : "No fue posible cargar los programas.");
+    } finally {
+      setLoadingPrograms(false);
+    }
+  }
+
+  function handleComposerOpen(open: boolean) {
+    setComposerOpen(open);
+    if (open) {
+      setStep("configure");
+      if (!loadingPrograms) void loadPrograms();
+    }
+  }
+
+  useEffect(() => {
+    if (composerOpen) stepHeading.current?.focus();
+  }, [composerOpen, step]);
+
+  const selectedProgram = programs.find((program) => program.id === programId);
+  const canReview = Boolean(selectedProgram && title.trim() && message.trim() && !loadingPrograms && !programError);
 
   const metrics = useMemo(() => {
     const sent = campaigns.reduce((total, campaign) => total + campaign.sentCount, 0);
@@ -227,191 +227,355 @@ export default function NotificationsPage() {
     };
   }, [campaigns]);
 
-  async function sendCampaign() {
-    if (!canSend || sending) return;
-    setSending(true);
-
-    try {
-      const response = await fetch("/api/notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          message: message.trim(),
-          audience,
-          locationId: audience === "location" ? locationId : null,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<Campaign>;
-
-      if (response.status === 401) {
-        goToLogin();
-        return;
-      }
-      if (!response.ok) throw new Error(payload.message ?? "No fue posible crear la campaña.");
-
-      setConfirmationOpen(false);
-      setTitle("");
-      setMessage("");
-      setAudience("all");
-      toast.success("Campaña en cola", {
-        description: "Fidara comenzó a preparar el envío a las tarjetas Wallet.",
-      });
-      await loadData(false);
-    } catch (caught) {
-      toast.error("No se pudo enviar", {
-        description: caught instanceof Error ? caught.message : "Ocurrió un error inesperado.",
-      });
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
-    <main className="min-h-full bg-[#F3F4F6] px-4 py-6 text-[#111827] sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto w-full max-w-[1480px]">
-        <header className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <Dialog.Root open={composerOpen} onOpenChange={handleComposerOpen}>
+      <div className={pageStyles.page}>
+        <header className={pageStyles.heading}>
           <div>
-            <span className="text-[11px] font-black tracking-[0.18em] text-[#E11D48]">COMUNICACIÓN</span>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">Notificaciones</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B7280]">
-              Envía mensajes directamente a las tarjetas Wallet de tus clientes.
-            </p>
+            <span className={pageStyles.eyebrow}>COMUNICACIÓN</span>
+            <h1>Marketing y notificaciones</h1>
+            <p>Gestiona campañas y recordatorios para las tarjetas Wallet de tus clientes.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadData(false)}
-            disabled={refreshing}
-            className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-xl border border-[#E5E7EB] bg-white px-4 text-xs font-extrabold transition hover:bg-slate-50 disabled:opacity-50 sm:self-auto"
-          >
-            <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
-            Actualizar
-          </button>
+          <div className={pageStyles.headingActions}>
+            <button
+              type="button"
+              onClick={() => void loadData(false)}
+              disabled={refreshing || loading}
+              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-[14px] border border-[#E5E7EB] bg-white px-4 text-sm font-extrabold hover:bg-[#F3F4F6] focus-visible:outline-2 focus-visible:outline-[#E11D48] disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+              Actualizar
+            </button>
+            <Dialog.Trigger className={pageStyles.primaryButton + " focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E11D48]"}>
+              <Plus size={18} />
+              Nueva campaña
+            </Dialog.Trigger>
+          </div>
         </header>
 
-        <section className="mb-6 grid overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_12px_35px_rgba(17,24,39,0.05)] sm:grid-cols-3">
-          {[
-            ["Campañas", metrics.total, <Megaphone key="a" size={18} />],
-            ["Entregas exitosas", metrics.sent, <CheckCircle2 key="b" size={18} />],
-            ["Tasa de entrega", `${metrics.rate}%`, <Send key="c" size={18} />],
-          ].map(([label, value, icon], index) => (
-            <div key={String(label)} className={`flex items-center gap-3 px-5 py-4 ${index < 2 ? "border-b border-[#E5E7EB] sm:border-b-0 sm:border-r" : ""}`}>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rose-50 text-[#E11D48]">{icon}</span>
-              <div><small className="text-[11px] font-bold text-[#6B7280]">{label}</small><strong className="mt-0.5 block text-xl font-black">{value}</strong></div>
-            </div>
-          ))}
+        <section aria-label="Métricas de campañas" className="@container rounded-2xl border border-[#E5E7EB] bg-white">
+          <dl className="grid divide-y divide-[#E5E7EB] @min-[34rem]:grid-cols-3 @min-[34rem]:divide-x @min-[34rem]:divide-y-0">
+            {[
+              { label: "Campañas", value: metrics.total, Icon: Megaphone },
+              { label: "Entregas exitosas", value: metrics.sent, Icon: CheckCircle2 },
+              { label: "Tasa de entrega", value: metrics.rate + "%", Icon: Send },
+            ].map(({ label, value, Icon }) => (
+              <div key={label} className="flex min-w-0 items-center gap-3 px-4 py-3 sm:px-5">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-rose-50 text-[#E11D48]">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <div>
+                  <dt className="text-xs font-bold text-[#6B7280]">{label}</dt>
+                  <dd className="text-xl font-extrabold">{loading ? "—" : value}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
         </section>
 
         {error && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
-            <span className="flex items-start gap-2"><AlertTriangle className="mt-0.5 shrink-0" size={17} />{error}</span>
-            <button type="button" onClick={() => void loadData(true)} className="shrink-0 font-extrabold">Reintentar</button>
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+            <span className="flex min-w-0 items-start gap-2 [overflow-wrap:anywhere]">
+              <AlertTriangle className="mt-0.5 shrink-0" size={17} />
+              {error}
+            </span>
+            <button type="button" onClick={() => void loadData(true)} className="font-extrabold">
+              Reintentar
+            </button>
           </div>
         )}
 
-        <GeoPushPanel />
+        <Tabs.Root defaultValue="campaigns" className="min-w-0">
+          <Tabs.List
+            aria-label="Secciones de marketing"
+            className="mb-4 flex max-w-full flex-wrap gap-1 rounded-xl border border-[#E5E7EB] bg-white p-1 sm:w-fit"
+          >
+            {[
+              { value: "campaigns", label: "Campañas" },
+              { value: "proximity", label: "Recordatorios por cercanía" },
+              { value: "history", label: "Historial" },
+            ].map(({ value, label }) => (
+              <Tabs.Tab
+                key={value}
+                value={value}
+                className="min-h-10 rounded-lg px-3 py-2 text-sm font-bold text-[#4B5563] hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-[#E11D48] data-[active]:bg-rose-50 data-[active]:text-[#BE123C]"
+              >
+                {label}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
 
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="overflow-hidden rounded-[22px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-            <div className="flex items-start gap-3 border-b border-[#E5E7EB] px-5 py-5 sm:px-6">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]"><Megaphone size={20} /></span>
-              <div><h2 className="text-base font-black">Crear campaña</h2><p className="mt-1 text-xs leading-5 text-[#6B7280]">Escribe el mensaje y selecciona quién debe recibirlo.</p></div>
-            </div>
+          <Tabs.Panel value="campaigns">
+            <CampaignHistory
+              heading="Campañas recientes"
+              campaigns={campaigns.slice(0, 5)}
+              loading={loading}
+              hasActiveCampaign={hasActiveCampaign}
+            />
+          </Tabs.Panel>
 
-            <div className="space-y-6 p-5 sm:p-6">
-              <label className="block">
-                <span className="mb-2 flex items-center justify-between text-xs font-extrabold">Título<small className="font-bold text-[#9CA3AF]">{title.length}/80</small></span>
-                <input maxLength={80} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Doble sello este viernes" className="h-12 w-full rounded-xl border border-[#E5E7EB] px-4 text-sm font-semibold outline-none transition placeholder:font-normal placeholder:text-[#9CA3AF] focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100" />
-              </label>
-              <label className="block">
-                <span className="mb-2 flex items-center justify-between text-xs font-extrabold">Mensaje<small className="font-bold text-[#9CA3AF]">{message.length}/300</small></span>
-                <textarea maxLength={300} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Escribe un mensaje breve y claro." className="w-full resize-none rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm font-semibold leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9CA3AF] focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100" />
-              </label>
+          <Tabs.Panel value="proximity" keepMounted>
+            <GeoPushPanel />
+          </Tabs.Panel>
 
-              <div>
-                <span className="mb-3 block text-xs font-extrabold">Audiencia</span>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {([
-                    ["all", "Todos", "Clientes con tarjeta Wallet", <Users key="all" size={18} />],
-                    ["location", "Por sucursal", "Clientes de una ubicación", <MapPin key="location" size={18} />],
-                  ] as const).map(([value, label, copy, icon]) => (
-                    <button key={value} type="button" onClick={() => setAudience(value)} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${audience === value ? "border-[#E11D48] bg-rose-50/60 ring-1 ring-[#E11D48]" : "border-[#E5E7EB] hover:border-slate-300"}`}>
-                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${audience === value ? "bg-[#E11D48] text-white" : "bg-[#F3F4F6] text-[#6B7280]"}`}>{icon}</span>
-                      <span><strong className="block text-sm font-extrabold">{label}</strong><small className="mt-1 block text-xs leading-5 text-[#6B7280]">{copy}</small></span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {audience === "location" && (
-                <label className="block">
-                  <span className="mb-2 block text-xs font-extrabold">Sucursal</span>
-                  <select value={locationId} onChange={(event) => setLocationId(event.target.value)} disabled={locations.length === 0} className="h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100 disabled:bg-slate-50">
-                    {locations.length === 0 && <option value="">No hay sucursales activas</option>}
-                    {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                  </select>
-                </label>
-              )}
-
-              <div className="flex flex-col-reverse gap-3 border-t border-[#E5E7EB] pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <span className="inline-flex items-center gap-2 text-xs font-bold text-[#6B7280]"><Clock3 size={15} />Envío inmediato</span>
-                <button type="button" disabled={!canSend || sending} onClick={() => setConfirmationOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#E11D48] px-5 text-sm font-extrabold text-white shadow-lg shadow-rose-600/20 transition hover:bg-[#BE123C] disabled:cursor-not-allowed disabled:opacity-40">
-                  <Send size={17} />Revisar y enviar
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <aside className="xl:sticky xl:top-6">
-            <div className="overflow-hidden rounded-[22px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-              <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4"><div><h2 className="text-sm font-black">Vista previa</h2><p className="mt-1 text-[11px] text-[#6B7280]">Así podría verla tu cliente</p></div><Smartphone size={19} className="text-[#6B7280]" /></div>
-              <div className="bg-[radial-gradient(circle_at_top_right,rgba(225,29,72,0.16),transparent_45%),#111827] p-5 sm:p-7">
-                <div className="mx-auto max-w-[340px] rounded-[30px] border border-white/10 bg-black/30 p-3 shadow-2xl">
-                  <div className="mb-3 flex justify-between px-2 pt-1 text-[10px] font-bold text-white/75"><span>11:11</span><span>● ● ●</span></div>
-                  <div className="rounded-[22px] bg-white p-4 shadow-xl">
-                    <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E11D48] text-white"><Bell size={18} /></span><div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><strong className="truncate text-xs font-black">{organizationName}</strong><small className="shrink-0 text-[10px] text-[#9CA3AF]">ahora</small></div><p className="mt-2 text-sm font-extrabold leading-5">{title.trim() || "Título de la notificación"}</p><p className="mt-1 text-xs leading-5 text-[#6B7280]">{message.trim() || "Tu mensaje aparecerá aquí mientras lo escribes."}</p></div></div>
-                  </div>
-                  <p className="py-3 text-center text-[10px] font-bold text-white/65">Apple Wallet · Google Wallet</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-5 py-4 text-xs"><span className="text-[#6B7280]">Audiencia</span><strong className="max-w-[240px] truncate text-right">{audienceLabel}</strong></div>
-            </div>
-          </aside>
-        </div>
-
-        <section className="mt-6 overflow-hidden rounded-[22px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.05)]">
-          <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-5 sm:px-6"><div><h2 className="text-base font-black">Historial de campañas</h2><p className="mt-1 text-xs text-[#6B7280]">Resultados reportados por la API.</p></div>{hasActiveCampaign && <span className="inline-flex items-center gap-2 text-xs font-bold text-blue-700"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
-          {loading ? (
-            <div className="grid min-h-52 place-items-center"><LoaderCircle className="animate-spin text-[#E11D48]" size={28} /></div>
-          ) : campaigns.length === 0 ? (
-            <div className="px-6 py-14 text-center"><Megaphone className="mx-auto text-slate-300" size={34} /><h3 className="mt-4 text-sm font-black">Todavía no hay campañas</h3><p className="mt-1 text-xs text-[#6B7280]">La primera campaña aparecerá aquí cuando la envíes.</p></div>
-          ) : (
-            <div className="divide-y divide-[#E5E7EB]">
-              {campaigns.map((campaign) => (
-                <article key={campaign.id} className="grid gap-4 px-5 py-5 transition hover:bg-rose-50/30 sm:px-6 lg:grid-cols-[minmax(240px,1.6fr)_minmax(150px,.8fr)_100px_minmax(190px,1fr)] lg:items-center lg:gap-5">
-                  <div className="min-w-0"><strong className="block truncate text-sm font-extrabold">{campaign.title}</strong><p className="mt-1 truncate text-xs text-[#6B7280]">{campaign.message}</p><small className="mt-2 block text-[10px] font-bold text-[#9CA3AF]">{formatDateTime(campaign.createdAt)}</small></div>
-                  <div className="flex min-w-0 items-center gap-2 text-xs font-bold text-[#6B7280]">{campaign.audience === "all" ? <Users size={14} className="shrink-0 text-[#E11D48]" /> : <MapPin size={14} className="shrink-0 text-[#E11D48]" />}<span className="truncate">{campaign.audience === "all" ? "Todos los clientes" : campaign.locationName || "Sucursal"}</span></div>
-                  <StatusBadge status={campaign.status} />
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><span className="font-extrabold text-emerald-700">{campaign.sentCount} enviadas</span>{campaign.failedCount > 0 && <span className="font-bold text-rose-700">{campaign.failedCount} fallidas</span>}{campaign.skippedCount + campaign.noWalletCount > 0 && <span className="font-bold text-[#6B7280]">{campaign.skippedCount + campaign.noWalletCount} omitidas</span>}</div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+          <Tabs.Panel value="history">
+            <CampaignHistory
+              heading="Historial de campañas"
+              campaigns={campaigns}
+              loading={loading}
+              hasActiveCampaign={hasActiveCampaign}
+            />
+          </Tabs.Panel>
+        </Tabs.Root>
       </div>
 
-      {confirmationOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#111827]/65 p-4 backdrop-blur-sm" onMouseDown={() => !sending && setConfirmationOpen(false)}>
-          <section role="alertdialog" aria-modal="true" aria-labelledby="send-title" className="w-full max-w-md rounded-[24px] border border-[#E5E7EB] bg-white p-6 shadow-[0_30px_90px_rgba(17,24,39,0.35)]" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]"><Send size={21} /></span><button type="button" disabled={sending} onClick={() => setConfirmationOpen(false)} className="grid h-9 w-9 place-items-center rounded-xl bg-[#F3F4F6] text-[#6B7280]"><X size={18} /></button></div>
-            <h2 id="send-title" className="mt-5 text-xl font-black">¿Enviar esta campaña?</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6B7280]">Se enviará “{title.trim()}” a {audienceLabel.toLowerCase()}.</p>
-            <div className="mt-5 rounded-2xl bg-[#F8FAFC] p-4"><strong className="block text-sm font-extrabold">{title.trim()}</strong><p className="mt-1 text-xs leading-5 text-[#6B7280]">{message.trim()}</p></div>
-            <div className="mt-7 grid gap-3 sm:grid-cols-2"><button type="button" disabled={sending} onClick={() => setConfirmationOpen(false)} className="min-h-11 rounded-xl border border-[#E5E7EB] text-sm font-extrabold">Seguir editando</button><button type="button" disabled={sending} onClick={() => void sendCampaign()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#E11D48] px-5 text-sm font-extrabold text-white disabled:opacity-60">{sending ? <LoaderCircle size={17} className="animate-spin" /> : <Send size={17} />}{sending ? "Enviando…" : "Enviar ahora"}</button></div>
-          </section>
-        </div>
-      )}
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[45] bg-[#111827]/60 backdrop-blur-sm" />
+        <Dialog.Popup className="@container fixed top-1/2 left-1/2 z-[46] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[24px] border border-[#E5E7EB] bg-white text-[#111827] shadow-[0_30px_90px_rgba(17,24,39,0.30)] outline-none">
+          <div className="flex items-start gap-3 border-b border-[#E5E7EB] p-4 sm:p-6">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
+              <Megaphone size={20} aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <Dialog.Title ref={stepHeading} tabIndex={-1} className="text-xl font-extrabold tracking-tight outline-none">
+                {step === "configure" ? "Configurar campaña" : "Revisar campaña"}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-[#6B7280]">
+                {step === "configure" ? "Paso 1 de 2 · Programa y mensaje" : "Paso 2 de 2 · Vista previa y alcance"}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close
+              aria-label="Cerrar"
+              className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827] focus-visible:outline-2 focus-visible:outline-[#E11D48]"
+            >
+              <X size={18} />
+            </Dialog.Close>
+          </div>
 
-    </main>
+          <div className="grid items-start gap-5 p-4 sm:p-6 @min-[42rem]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-4">
+              {step === "configure" ? (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-extrabold">Programa para la vista previa</span>
+                    <select
+                      value={programId}
+                      onChange={(event) => setProgramId(event.target.value)}
+                      disabled={loadingPrograms || Boolean(programError) || programs.length === 0}
+                      className={"h-11 truncate disabled:bg-[#F3F4F6] " + campaignField}
+                    >
+                      <option value="">
+                        {loadingPrograms ? "Cargando programas…" : programs.length ? "Selecciona un programa" : "Sin programas disponibles"}
+                      </option>
+                      {programs.map((program) => (
+                        <option key={program.id} value={program.id}>{program.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {programError && (
+                    <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 p-3 text-xs text-[#881337] [overflow-wrap:anywhere]">
+                      <span>{programError}</span>
+                      <button type="button" onClick={() => void loadPrograms()} className="font-extrabold underline">
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+
+                  <label className="block">
+                    <span className="mb-2 flex justify-between gap-2 text-xs font-extrabold">
+                      Título <small className="font-bold text-[#6B7280]">{title.length}/80</small>
+                    </span>
+                    <input
+                      maxLength={80}
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="Ej. Doble sello este viernes"
+                      className={"h-11 " + campaignField}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 flex justify-between gap-2 text-xs font-extrabold">
+                      Mensaje <small className="font-bold text-[#6B7280]">{message.length}/300</small>
+                    </span>
+                    <textarea
+                      maxLength={300}
+                      rows={3}
+                      value={message}
+                      onChange={(event) => setMessage(event.target.value)}
+                      placeholder="Escribe un mensaje breve y claro."
+                      className={"resize-y py-2.5 leading-6 " + campaignField}
+                    />
+                  </label>
+                </>
+              ) : (
+                <dl className="rounded-xl border border-[#E5E7EB] p-3 text-sm [overflow-wrap:anywhere]">
+                  <dt className="text-xs font-bold text-[#6B7280]">Programa de la vista previa</dt>
+                  <dd className="mt-1 font-extrabold">{selectedProgram?.name}</dd>
+                </dl>
+              )}
+
+              <div id="campaign-audience-note" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-950">
+                <h2 className="font-extrabold">Envío por programa no disponible</h2>
+                <p className="mt-1">
+                  La API de campañas aún no ofrece un filtro por programa confirmado. Las opciones anteriores
+                  de todos los clientes o por sucursal podían abarcar varios programas. El programa de arriba
+                  solo configura la vista previa.
+                </p>
+              </div>
+            </div>
+
+            <CampaignPreview
+              organizationName={organizationName}
+              logoUrl={selectedProgram?.cardLogoUrl}
+              title={title}
+              message={message}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#E5E7EB] p-4 sm:px-6">
+            {step === "configure" ? (
+              <button
+                type="button"
+                disabled={!canReview}
+                onClick={() => setStep("review")}
+                className={campaignPrimaryAction}
+              >
+                Revisar campaña
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep("configure")}
+                  className="min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold hover:bg-[#F3F4F6] focus-visible:outline-2 focus-visible:outline-[#E11D48] sm:w-auto"
+                >
+                  Volver a configurar
+                </button>
+                <button type="button" disabled aria-describedby="campaign-audience-note" className={campaignPrimaryAction}>
+                  <Send size={17} aria-hidden="true" />
+                  Confirmar envío
+                </button>
+              </>
+            )}
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+const campaignField =
+  "w-full min-w-0 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827] outline-none transition placeholder:font-normal placeholder:text-[#6B7280] focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100";
+
+const campaignPrimaryAction =
+  "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#E11D48] px-5 text-sm font-extrabold text-white transition-colors enabled:hover:bg-[#BE123C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E11D48] disabled:cursor-not-allowed disabled:bg-[#FBCDD8] disabled:text-[#881337] sm:w-auto";
+
+const apiUrl = process.env.NEXT_PUBLIC_FIDARA_API_URL ?? "https://api.fidara.mx";
+
+function CampaignPreview({
+  organizationName,
+  logoUrl,
+  title,
+  message,
+}: {
+  organizationName: string;
+  logoUrl?: string | null;
+  title: string;
+  message: string;
+}) {
+  const [failedLogo, setFailedLogo] = useState<string>();
+  const logo = logoUrl && (/^https?:\/\//i.test(logoUrl) ? logoUrl : apiUrl.replace(/\/$/, "") + "/" + logoUrl.replace(/^\/+/, ""));
+
+  return (
+    <aside className="min-w-0 rounded-2xl bg-linear-to-br from-slate-900 to-slate-600 p-4 text-white">
+      <h2 className="text-sm font-extrabold">Vista previa en iOS</h2>
+      <p className="mt-1 text-xs text-white/80">Apariencia aproximada en la pantalla bloqueada.</p>
+      <div className="mt-4 rounded-[22px] border border-white/60 bg-white/95 p-3 text-[#111827] shadow-lg">
+        <div className="flex items-center gap-2">
+          <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-rose-50 text-[#E11D48]">
+            {logo && logo !== failedLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- El logo puede venir de la URL pública configurada por Fidara.
+              <img src={logo} alt="" className="size-full object-contain" onError={() => setFailedLogo(logo)} />
+            ) : (
+              <Bell size={16} aria-hidden="true" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1 text-xs font-semibold [overflow-wrap:anywhere]">{organizationName}</span>
+          <small className="shrink-0 text-[11px] text-[#6B7280]">ahora</small>
+        </div>
+        <p className="mt-2 text-sm font-extrabold [overflow-wrap:anywhere]">{title.trim() || "Título de la notificación"}</p>
+        <p className="mt-0.5 whitespace-pre-wrap text-sm leading-5 [overflow-wrap:anywhere]">
+          {message.trim() || "Tu mensaje aparecerá aquí mientras lo escribes."}
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+function CampaignHistory({
+  heading,
+  campaigns,
+  loading,
+  hasActiveCampaign,
+}: {
+  heading: string;
+  campaigns: Campaign[];
+  loading: boolean;
+  hasActiveCampaign: boolean;
+}) {
+  return (
+    <section className="@container min-w-0 rounded-[22px] border border-[#E5E7EB] bg-white">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] px-4 py-3 sm:px-5">
+        <h2 className="text-base font-extrabold">{heading}</h2>
+        {hasActiveCampaign && (
+          <span className="inline-flex items-center gap-2 text-xs font-bold text-blue-700">
+            <LoaderCircle size={15} className="animate-spin" /> Actualizando
+          </span>
+        )}
+      </header>
+
+      {loading ? (
+        <div role="status" className="grid min-h-36 place-items-center">
+          <span className="sr-only">Cargando campañas</span>
+          <LoaderCircle className="animate-spin text-[#E11D48]" size={28} />
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="px-4 py-8 text-center">
+          <Megaphone className="mx-auto text-[#9CA3AF]" size={28} aria-hidden="true" />
+          <h3 className="mt-3 text-sm font-extrabold">Todavía no hay campañas</h3>
+          <p className="mt-1 text-xs text-[#6B7280]">La primera campaña aparecerá aquí cuando la envíes.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-[#E5E7EB]">
+          {campaigns.map((campaign) => (
+            <li key={campaign.id} className="grid min-w-0 items-start gap-2 px-4 py-4 sm:px-5 @min-[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] @min-[50rem]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_minmax(0,1fr)] @min-[50rem]:items-center @min-[50rem]:gap-4">
+              <div className="min-w-0 [overflow-wrap:anywhere]">
+                <strong className="block text-sm font-extrabold">{campaign.title}</strong>
+                <p className="mt-1 text-xs leading-5 text-[#6B7280]">{campaign.message}</p>
+                <time dateTime={campaign.createdAt} className="mt-1 block text-[11px] text-[#6B7280]">
+                  {formatDateTime(campaign.createdAt)}
+                </time>
+              </div>
+              <div className="flex min-w-0 items-start gap-2 text-xs font-bold text-[#6B7280]">
+                {campaign.audience === "all"
+                  ? <Users size={14} className="shrink-0 text-[#E11D48]" />
+                  : <MapPin size={14} className="shrink-0 text-[#E11D48]" />}
+                <span className="[overflow-wrap:anywhere]">
+                  {campaign.audience === "all" ? "Todos los clientes" : campaign.locationName || "Sucursal"}
+                </span>
+              </div>
+              <StatusBadge status={campaign.status} />
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                <span className="font-extrabold text-emerald-700">{campaign.sentCount} enviadas</span>
+                {campaign.failedCount > 0 && <span className="font-bold text-rose-700">{campaign.failedCount} fallidas</span>}
+                {campaign.skippedCount + campaign.noWalletCount > 0 && (
+                  <span className="font-bold text-[#6B7280]">{campaign.skippedCount + campaign.noWalletCount} omitidas</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

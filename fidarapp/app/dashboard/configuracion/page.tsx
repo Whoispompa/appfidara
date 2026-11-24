@@ -19,7 +19,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { Poppins } from "next/font/google";
 import { toast } from "sonner";
+import pageStyles from "../clientes/customers.module.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "600", "700", "800"], display: "swap" });
 
 type Program = {
   id: string;
@@ -262,247 +266,243 @@ export default function ConfigurationPage() {
   }
 
   return (
-    <main className="min-h-full bg-[#F3F4F6] px-4 py-6 text-[#111827] sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto w-full max-w-[1380px]">
-        <header className="mb-7">
-          <span className="text-[11px] font-black tracking-[0.18em] text-[#E11D48]">
-            PERSONALIZACIÓN
+    <div className={[pageStyles.page, poppins.className, "@container"].join(" ")}>
+      <header className={pageStyles.heading}>
+        <div>
+          <span className={pageStyles.eyebrow}>
+            NEGOCIO
           </span>
-          <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+          <h1>
             Configuración
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">
+          <p>
             Personaliza cómo aparece tu negocio en las tarjetas y notificaciones Wallet.
           </p>
-        </header>
+        </div>
+      </header>
 
-        {error && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-            <span className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 shrink-0" size={17} />
-              {error}
-            </span>
-            <button type="button" onClick={() => void loadBranding()} className="font-extrabold">
-              Reintentar
-            </button>
-          </div>
-        )}
+      {error && (
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span className="flex min-w-0 items-start gap-2 [overflow-wrap:anywhere]">
+            <AlertTriangle className="mt-0.5 shrink-0" size={17} />
+            {error}
+          </span>
+          <button type="button" onClick={() => void loadBranding()} className="font-extrabold">
+            Reintentar
+          </button>
+        </div>
+      )}
 
-        {loading ? (
-          <div className="grid min-h-[420px] place-items-center rounded-[24px] border border-[#E5E7EB] bg-white">
-            <LoaderCircle className="animate-spin text-[#E11D48]" size={30} />
-          </div>
-        ) : (
-          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <section className="overflow-hidden rounded-[24px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-              <div className="flex items-start gap-3 border-b border-[#E5E7EB] px-5 py-5 sm:px-6">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
-                  <Palette size={20} />
-                </span>
-                <div>
-                  <h2 className="text-base font-black">Identidad del negocio</h2>
-                  <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-                    Este logo reemplazará el icono predeterminado de Fidara.
-                  </p>
-                </div>
+      {loading ? (
+        <div className="grid min-h-56 place-items-center rounded-[24px] border border-[#E5E7EB] bg-white">
+          <LoaderCircle className="animate-spin text-[#E11D48]" size={30} />
+        </div>
+      ) : (
+        <div className="grid min-w-0 items-start gap-5 @min-[44rem]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] @min-[64rem]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <section aria-labelledby="identity-heading" className="min-w-0 rounded-[24px] border border-[#E5E7EB] bg-white shadow-[0_14px_42px_rgba(17,24,39,0.06)]">
+            <div className="flex items-start gap-3 border-b border-[#E5E7EB] p-4 @min-[36rem]:p-5">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
+                <Palette size={20} />
+              </span>
+              <div>
+                <h2 id="identity-heading" className="text-base font-extrabold">Identidad visual</h2>
+                <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+                  Este logo reemplazará el icono predeterminado de Fidara.
+                </p>
               </div>
+            </div>
 
-              <div className="space-y-6 p-5 sm:p-6">
-                <label className="block">
-                  <span className="mb-2 block text-xs font-extrabold">Programa de lealtad</span>
-                  <select
-                    value={programId}
-                    onChange={(event) => handleProgramChange(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold outline-none transition focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
-                  >
-                    {data?.programs.length === 0 && (
-                      <option value="">No hay programas disponibles</option>
-                    )}
-                    {data?.programs.map((program) => (
-                      <option key={program.id} value={program.id}>
-                        {program.name}{program.isActive ? "" : " · Inactivo"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+            <div className="space-y-5 p-4 @min-[36rem]:p-5">
+              <label className="block">
+                <span className="mb-2 block text-xs font-extrabold">Programa de lealtad</span>
+                <select
+                  value={programId}
+                  onChange={(event) => handleProgramChange(event.target.value)}
+                  className="h-12 w-full min-w-0 truncate rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827] outline-none transition focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
+                >
+                  {data?.programs.length === 0 && (
+                    <option value="">No hay programas disponibles</option>
+                  )}
+                  {data?.programs.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.name}{program.isActive ? "" : " · Inactivo"}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                <div>
-                  <span className="mb-2 block text-xs font-extrabold">Logo del café o negocio</span>
-                  <div
-                    onDragEnter={(event) => {
-                      event.preventDefault();
-                      setDragging(true);
-                    }}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={handleDrop}
-                    className={`relative flex min-h-56 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${
-                      dragging
-                        ? "border-[#E11D48] bg-rose-50"
-                        : "border-[#D1D5DB] bg-[#F8FAFC] hover:border-[#E11D48]"
-                    }`}
-                  >
-                    {displayedLogo ? (
-                      <>
-                        <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-[26px] border border-[#E5E7EB] bg-white p-3 shadow-sm">
-                          <img
-                            src={displayedLogo}
-                            alt={`Logo de ${selectedProgram?.name ?? "negocio"}`}
-                            className="h-full w-full object-contain"
-                          />
-                        </div>
-                        <strong className="mt-4 text-sm font-extrabold">
-                          {selectedFile?.name ?? "Logo actual"}
-                        </strong>
-                        <p className="mt-1 text-xs text-[#6B7280]">
-                          {selectedFile
-                            ? `${(selectedFile.size / 1024).toFixed(0)} KB · listo para guardar`
-                            : "Selecciona otra imagen para reemplazarlo"}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
-                          <UploadCloud size={24} />
-                        </span>
-                        <strong className="mt-4 text-sm font-extrabold">
-                          Arrastra aquí el logo de tu negocio
-                        </strong>
-                        <p className="mt-1 text-xs text-[#6B7280]">
-                          PNG, JPG o WebP · máximo 5 MB
-                        </p>
-                      </>
-                    )}
+              <div>
+                <span className="mb-2 block text-xs font-extrabold">Logo del negocio</span>
+                <div
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={handleDrop}
+                  className={`flex flex-col items-center rounded-2xl border border-dashed px-3 py-4 text-center transition ${
+                    dragging
+                      ? "border-[#E11D48] bg-rose-50"
+                      : "border-[#D1D5DB] bg-white hover:border-[#E11D48]"
+                  }`}
+                >
+                  {displayedLogo ? (
+                    <>
+                      <div className="grid size-20 place-items-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-2">
+                        <img
+                          src={displayedLogo}
+                          alt={`Logo de ${selectedProgram?.name ?? "negocio"}`}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <strong className="mt-3 max-w-full text-sm font-extrabold [overflow-wrap:anywhere]">
+                        {selectedFile?.name ?? "Logo actual"}
+                      </strong>
+                      <p className="mt-1 text-xs text-[#6B7280]">
+                        {selectedFile
+                          ? `${(selectedFile.size / 1024).toFixed(0)} KB · listo para guardar`
+                          : "Selecciona otra imagen para reemplazarlo"}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
+                        <UploadCloud size={24} />
+                      </span>
+                      <strong className="mt-3 max-w-full text-sm font-extrabold [overflow-wrap:anywhere]">
+                        Arrastra aquí el logo de tu negocio
+                      </strong>
+                      <p className="mt-1 text-xs text-[#6B7280]">
+                        PNG, JPG o WebP · máximo 5 MB
+                      </p>
+                    </>
+                  )}
 
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
 
-                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-xs font-extrabold transition hover:border-[#E11D48] hover:text-[#E11D48]"
+                    >
+                      <ImageIcon size={15} />
+                      {displayedLogo ? "Cambiar imagen" : "Seleccionar imagen"}
+                    </button>
+                    {selectedFile && (
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-xs font-extrabold transition hover:border-[#E11D48] hover:text-[#E11D48]"
+                        onClick={clearSelection}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-xs font-extrabold text-[#6B7280] hover:bg-white"
                       >
-                        <ImageIcon size={15} />
-                        {displayedLogo ? "Cambiar imagen" : "Seleccionar imagen"}
+                        <X size={15} />
+                        Cancelar cambio
                       </button>
-                      {selectedFile && (
-                        <button
-                          type="button"
-                          onClick={clearSelection}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-xs font-extrabold text-[#6B7280] hover:bg-white"
-                        >
-                          <X size={15} />
-                          Cancelar cambio
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex gap-3 rounded-2xl bg-[#F8FAFC] p-4">
-                    <ShieldCheck className="shrink-0 text-emerald-700" size={19} />
-                    <div>
-                      <strong className="block text-xs font-extrabold">Recomendación</strong>
-                      <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-                        Usa una imagen cuadrada de al menos 512 × 512 px.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 rounded-2xl bg-[#F8FAFC] p-4">
-                    <Bell className="shrink-0 text-[#E11D48]" size={19} />
-                    <div>
-                      <strong className="block text-xs font-extrabold">Actualización Wallet</strong>
-                      <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-                        Las tarjetas instaladas reciben el cambio por push.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end border-t border-[#E5E7EB] pt-5">
-                  <button
-                    type="button"
-                    disabled={!selectedFile || !programId || saving}
-                    onClick={() => void saveLogo()}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#E11D48] px-5 text-sm font-extrabold text-white shadow-lg shadow-rose-600/20 transition hover:bg-[#BE123C] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {saving ? (
-                      <LoaderCircle className="animate-spin" size={17} />
-                    ) : (
-                      <Save size={17} />
                     )}
-                    {saving ? "Actualizando…" : "Guardar identidad"}
-                  </button>
+                  </div>
                 </div>
               </div>
-            </section>
 
-            <aside className="xl:sticky xl:top-6">
-              <div className="overflow-hidden rounded-[24px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.06)]">
-                <div className="border-b border-[#E5E7EB] px-5 py-4">
-                  <h2 className="text-sm font-black">Vista previa de notificación</h2>
-                  <p className="mt-1 text-[11px] text-[#6B7280]">
-                    Así reconocerán tus clientes el mensaje.
-                  </p>
-                </div>
-
-                <div className="bg-[radial-gradient(circle_at_top_right,rgba(225,29,72,0.16),transparent_45%),#111827] p-5 sm:p-7">
-                  <div className="mx-auto max-w-[350px] rounded-[32px] border border-white/10 bg-black/30 p-3 shadow-2xl">
-                    <div className="mb-3 flex justify-between px-2 pt-1 text-[10px] font-bold text-white/75">
-                      <span>9:41</span>
-                      <span>● ● ●</span>
-                    </div>
-                    <div className="rounded-[22px] bg-white p-4 shadow-xl">
-                      <div className="flex items-start gap-3">
-                        <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-1.5">
-                          {displayedLogo ? (
-                            <img src={displayedLogo} alt="" className="h-full w-full object-contain" />
-                          ) : (
-                            <Bell size={19} className="text-[#E11D48]" />
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex justify-between gap-3">
-                            <strong className="truncate text-xs font-black">
-                              {data?.organizationName ?? "Tu negocio"}
-                            </strong>
-                            <small className="shrink-0 text-[10px] text-[#9CA3AF]">ahora</small>
-                          </div>
-                          <p className="mt-2 text-sm font-extrabold leading-5">
-                            ¡Tienes una nueva promoción!
-                          </p>
-                          <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-                            Visítanos hoy y recibe un beneficio especial.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="py-3 text-center text-[10px] font-bold text-white/65">
-                      {selectedProgram?.name ?? "Programa de lealtad"}
+              <div className="grid gap-3">
+                <div className="flex gap-2">
+                  <ShieldCheck className="shrink-0 text-emerald-700" size={19} />
+                  <div>
+                    <strong className="block text-xs font-extrabold">Recomendación</strong>
+                    <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+                      Usa una imagen cuadrada de al menos 512 × 512 px.
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between px-5 py-4 text-xs">
-                  <span className="text-[#6B7280]">Estado</span>
-                  <span className="inline-flex items-center gap-1.5 font-extrabold text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    {selectedProgram?.logoUrl ? "Logo personalizado" : "Logo predeterminado"}
-                  </span>
+                <div className="flex gap-2">
+                  <Bell className="shrink-0 text-[#E11D48]" size={19} />
+                  <div>
+                    <strong className="block text-xs font-extrabold">Actualización Wallet</strong>
+                    <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+                      Las tarjetas instaladas reciben el cambio por push.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </aside>
-          </div>
-        )}
-      </div>
 
-    </main>
+              <div className="flex justify-end border-t border-[#E5E7EB] pt-4">
+                <button
+                  type="button"
+                  disabled={!selectedFile || !programId || saving}
+                  onClick={() => void saveLogo()}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#E11D48] @min-[26rem]:w-auto px-5 text-sm font-extrabold text-white shadow-lg shadow-rose-600/20 transition hover:bg-[#BE123C] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {saving ? (
+                    <LoaderCircle className="animate-spin" size={17} />
+                  ) : (
+                    <Save size={17} />
+                  )}
+                  {saving ? "Actualizando…" : "Guardar identidad"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="wallet-heading" className="min-w-0 rounded-[24px] border border-[#E5E7EB] bg-white shadow-[0_14px_42px_rgba(17,24,39,0.06)]">
+            <div className="flex items-start gap-3 border-b border-[#E5E7EB] p-4 @min-[36rem]:p-5">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
+                <Bell size={20} />
+              </span>
+              <div>
+                <h2 id="wallet-heading" className="text-base font-extrabold">Notificaciones Wallet</h2>
+                <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+                  Vista previa de cómo verán tus clientes una notificación.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 @min-[36rem]:p-5">
+              <div className="rounded-2xl bg-[#111827] p-3 @min-[36rem]:p-4">
+                <div className="flex items-start gap-2.5 rounded-xl bg-white p-3">
+                  <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-1.5">
+                    {displayedLogo ? (
+                      <img src={displayedLogo} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      <Bell size={19} className="text-[#E11D48]" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                      <strong className="min-w-0 text-xs font-extrabold [overflow-wrap:anywhere]">
+                        {data?.organizationName ?? "Tu negocio"}
+                      </strong>
+                      <small className="text-[10px] text-[#6B7280]">ahora</small>
+                    </div>
+                    <p className="mt-1 text-sm font-extrabold leading-5 [overflow-wrap:anywhere]">
+                      ¡Tienes una nueva promoción!
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-[#6B7280] [overflow-wrap:anywhere]">
+                      Visítanos hoy y recibe un beneficio especial.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-center text-[11px] font-semibold text-white/75 [overflow-wrap:anywhere]">
+                  {selectedProgram?.name ?? "Programa de lealtad"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E5E7EB] px-4 py-3 text-xs @min-[36rem]:px-5">
+              <span className="text-[#6B7280]">Logo guardado</span>
+              <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700">
+                <span className="size-1.5 shrink-0 rounded-full bg-current" />
+                {selectedProgram?.logoUrl ? "Personalizado" : "Predeterminado"}
+              </span>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }

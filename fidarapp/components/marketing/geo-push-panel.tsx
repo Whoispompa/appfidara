@@ -320,8 +320,8 @@ export function GeoPushPanel() {
         selectedLocationIds.length > 0));
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[22px] border border-[#E5E7EB] bg-white shadow-[0_18px_45px_rgba(0,0,0,0.06)]">
-      <div className="flex flex-col gap-4 border-b border-[#E5E7EB] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <section className="@container min-w-0 rounded-[22px] border border-[#E5E7EB] bg-white text-[#111827]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] px-4 py-3 sm:px-5">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-rose-50 text-[#E11D48]">
             <MapPin size={20} />
@@ -346,6 +346,7 @@ export function GeoPushPanel() {
         <button
           type="button"
           role="switch"
+          aria-label="Activar recordatorios por cercanía"
           aria-checked={enabled}
           disabled={
             loadingConfiguration ||
@@ -355,7 +356,7 @@ export function GeoPushPanel() {
             setEnabled((current) => !current)
           }
           className={[
-            "relative h-7 w-12 rounded-full transition",
+            "relative h-7 w-12 shrink-0 rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E11D48] disabled:opacity-50",
             enabled
               ? "bg-[#E11D48]"
               : "bg-[#E5E7EB]",
@@ -384,8 +385,8 @@ export function GeoPushPanel() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="space-y-5">
+        <div className="grid items-start gap-5 p-4 sm:p-5 @min-[42rem]:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-4">
             <label className="block">
               <span className="mb-2 block text-xs font-extrabold">
                 Programa
@@ -396,7 +397,7 @@ export function GeoPushPanel() {
                 onChange={(event) =>
                   setProgramId(event.target.value)
                 }
-                className="h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
+                className="h-11 w-full min-w-0 truncate rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
               >
                 {programs.map((program) => (
                   <option
@@ -436,7 +437,7 @@ export function GeoPushPanel() {
                       setMessage(event.target.value)
                     }
                     placeholder="¿Ya tomaste café hoy? ☕"
-                    className="w-full resize-none rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm font-semibold leading-6 outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
+                    className="w-full min-w-0 resize-y rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm font-semibold text-[#111827] leading-6 outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
                   />
                 </label>
 
@@ -471,7 +472,7 @@ export function GeoPushPanel() {
                               )
                             }
                             className={[
-                              "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition",
+                              "flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-[#E11D48]",
                               selected
                                 ? "border-[#E11D48] bg-rose-50"
                                 : "border-[#E5E7EB] hover:border-slate-300",
@@ -479,7 +480,7 @@ export function GeoPushPanel() {
                           >
                             <span
                               className={[
-                                "grid h-9 w-9 place-items-center rounded-xl",
+                                "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
                                 selected
                                   ? "bg-[#E11D48] text-white"
                                   : "bg-[#F3F4F6] text-[#6B7280]",
@@ -547,7 +548,7 @@ export function GeoPushPanel() {
             )}
           </div>
 
-          <aside className="rounded-2xl bg-black p-5 text-white">
+          <aside className="min-w-0 rounded-2xl bg-[#111827] p-4 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <small className="font-bold text-white/60">
@@ -565,19 +566,19 @@ export function GeoPushPanel() {
               />
             </div>
 
-            <div className="mt-6 rounded-2xl bg-white p-4 text-black shadow-xl">
+            <div className="mt-3 rounded-xl bg-white p-3 text-[#111827]">
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E11D48] text-white">
                   <BellRing size={18} />
                 </span>
 
                 <div>
-                  <strong className="text-xs">
+                  <strong className="text-xs [overflow-wrap:anywhere]">
                     {configuration?.program.name ||
                       "Tu programa"}
                   </strong>
 
-                  <p className="mt-2 text-xs leading-5 text-[#6B7280]">
+                  <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[#6B7280] [overflow-wrap:anywhere]">
                     {message.trim() ||
                       "Tu mensaje aparecerá aquí."}
                   </p>
@@ -585,7 +586,7 @@ export function GeoPushPanel() {
               </div>
             </div>
 
-            <p className="mt-5 text-[11px] leading-5 text-white/60">
+            <p className="mt-3 text-[11px] leading-5 text-white/75">
               Apple determina automáticamente el
               radio y el momento en que presenta la
               tarjeta.

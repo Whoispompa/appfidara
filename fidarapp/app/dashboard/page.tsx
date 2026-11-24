@@ -2,6 +2,7 @@
 
 
 
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { formatShortDateTime } from "@/components/lib/date-time";
 import {
   complementaryPaymentMethodLabel,
@@ -50,7 +51,7 @@ import {
 
 import type { LucideIcon } from "lucide-react";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 
 
@@ -237,30 +238,6 @@ type Period = "today" | "month";
 
 
 type ChartMetric = "netSales" | "operations" | "customers";
-
-
-
-const EMPTY_METRICS: PeriodMetrics = {
-
-  operations: 0,
-
-  customers: 0,
-
-  grossSales: 0,
-
-  netSales: 0,
-
-  stampsAdded: 0,
-
-  pointsAdded: 0,
-
-  cashbackGenerated: 0,
-
-  cashbackUsed: 0,
-
-  rewardsRedeemed: 0,
-
-};
 
 
 
@@ -518,6 +495,8 @@ function getMovementPresentation(movement: RecentTransaction): {
 
 
 
+const dashboardMainClass = "min-h-full px-5 py-8 text-black sm:px-8 lg:px-[46px] lg:pb-12";
+
 export default function DashboardPage() {
 
   const router = useRouter();
@@ -545,12 +524,6 @@ export default function DashboardPage() {
 
 
   const loadDashboard = useCallback(async () => {
-
-    setLoading(true);
-
-    setError("");
-
-
 
     try {
 
@@ -614,13 +587,53 @@ export default function DashboardPage() {
 
   useEffect(() => {
 
-    void loadDashboard();
+    void Promise.resolve().then(loadDashboard);
 
   }, [loadDashboard]);
 
 
 
-  const metrics = summary?.[period] ?? EMPTY_METRICS;
+  function reloadDashboard() {
+    setLoading(true);
+    setError("");
+    void loadDashboard();
+  }
+
+  const errorNotice = error && (
+    <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+
+      <span className="font-bold">{error}</span>
+
+
+
+      <button
+
+        type="button"
+
+        onClick={reloadDashboard}
+
+        className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-extrabold"
+
+      >
+
+        Intentar nuevamente
+
+      </button>
+
+    </div>
+  );
+
+  if (!summary) {
+    return (
+      <main className={dashboardMainClass}>
+        <div className="mx-auto max-w-[1560px]">
+          {loading ? <DashboardSkeleton /> : errorNotice}
+        </div>
+      </main>
+    );
+  }
+
+  const metrics = summary[period];
 
 
 
@@ -698,35 +711,31 @@ export default function DashboardPage() {
 
 
 
-  const chartValues = useMemo(() => {
+  const chartValues = summary.lastSevenDays.map((item) => {
 
-    return (summary?.lastSevenDays ?? []).map((item) => {
+    const value =
 
-      const value =
+      chartMetric === "netSales"
 
-        chartMetric === "netSales"
+        ? item.netSales ?? item.grossSales
 
-          ? item.netSales ?? item.grossSales
+        : chartMetric === "operations"
 
-          : chartMetric === "operations"
+          ? item.operations
 
-            ? item.operations
-
-            : item.customers;
+          : item.customers;
 
 
 
-      return {
+    return {
 
-        ...item,
+      ...item,
 
-        value,
+      value,
 
-      };
+    };
 
-    });
-
-  }, [summary, chartMetric]);
+  });
 
 
 
@@ -742,7 +751,7 @@ export default function DashboardPage() {
 
   const applePercentage =
 
-    summary && summary.installedCards > 0
+    summary.installedCards > 0
 
       ? Math.round(
 
@@ -758,7 +767,7 @@ export default function DashboardPage() {
 
   const googlePercentage =
 
-    summary && summary.installedCards > 0
+    summary.installedCards > 0
 
       ? Math.round(
 
@@ -774,7 +783,7 @@ export default function DashboardPage() {
 
   return (
 
-    <main className="min-h-full px-5 py-8 text-black sm:px-8 lg:px-[46px] lg:pb-12">
+    <main className={dashboardMainClass}>
 
       <div className="mx-auto max-w-[1560px]">
 
@@ -804,7 +813,7 @@ export default function DashboardPage() {
 
               <strong className="text-black">
 
-                {summary?.organizationName ?? "tu negocio"}
+                {summary.organizationName ?? "tu negocio"}
 
               </strong>
 
@@ -817,33 +826,6 @@ export default function DashboardPage() {
 
 
           <div className="flex flex-col gap-3 sm:flex-row">
-
-            <button
-
-              type="button"
-
-              onClick={() => void loadDashboard()}
-
-              disabled={loading}
-
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-black transition hover:bg-[#F3F4F6] disabled:opacity-50"
-
-            >
-
-              {loading ? (
-
-                <LoaderCircle className="animate-spin" size={18} />
-
-              ) : (
-
-                <RefreshCw size={18} />
-
-              )}
-
-              Actualizar
-
-            </button>
-
 
 
             <Link
@@ -866,31 +848,7 @@ export default function DashboardPage() {
 
 
 
-        {error && (
-
-          <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
-
-            <span className="font-bold">{error}</span>
-
-
-
-            <button
-
-              type="button"
-
-              onClick={() => void loadDashboard()}
-
-              className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-extrabold"
-
-            >
-
-              Intentar nuevamente
-
-            </button>
-
-          </div>
-
-        )}
+        {errorNotice}
 
 
 
@@ -996,19 +954,11 @@ export default function DashboardPage() {
 
 
 
-                {loading ? (
+                <strong className="mt-1 block text-[28px] font-extrabold tracking-[-0.04em] text-black">
 
-                  <div className="mt-2 h-9 w-24 animate-pulse rounded-lg bg-[#F3F4F6]" />
+                  {metric.value}
 
-                ) : (
-
-                  <strong className="mt-1 block text-[28px] font-extrabold tracking-[-0.04em] text-black">
-
-                    {metric.value}
-
-                  </strong>
-
-                )}
+                </strong>
 
 
 
@@ -1316,7 +1266,7 @@ export default function DashboardPage() {
 
             <strong className="mt-5 block text-[40px] font-extrabold tracking-[-0.05em] text-black">
 
-              {summary?.installedCards ?? 0}
+              {summary.installedCards}
 
             </strong>
 
@@ -1336,7 +1286,7 @@ export default function DashboardPage() {
 
                 label="Apple Wallet"
 
-                value={summary?.installedCardsByPlatform.apple ?? 0}
+                value={summary.installedCardsByPlatform.apple}
 
                 percentage={applePercentage}
 
@@ -1348,7 +1298,7 @@ export default function DashboardPage() {
 
                 label="Google Wallet"
 
-                value={summary?.installedCardsByPlatform.google ?? 0}
+                value={summary.installedCardsByPlatform.google}
 
                 percentage={googlePercentage}
 
@@ -1416,7 +1366,7 @@ export default function DashboardPage() {
 
 
 
-          {!loading && (summary?.recentTransactions.length ?? 0) === 0 ? (
+          {summary.recentTransactions.length === 0 ? (
 
             <div className="mt-6 flex flex-col items-center border-t border-dashed border-[#D1D5DB] py-10 text-center">
 
@@ -1464,7 +1414,7 @@ export default function DashboardPage() {
 
             <div className="mt-6 divide-y divide-[#E5E7EB] border-t border-[#E5E7EB]">
 
-              {summary?.recentTransactions.map((movement) => (
+              {summary.recentTransactions.map((movement) => (
 
                 <MovementRow
 
