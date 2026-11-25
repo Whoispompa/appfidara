@@ -15,10 +15,11 @@ export function FidaraLogo({
       <Image
         src="/Fidara-logo-blanco.png"
         alt="Fidara"
-        width={150}
-        height={44}
+        width={300}
+        height={100}
+        sizes="150px"
         priority
-        className="fidara-logo-image"
+        className="fidara-logo-image h-auto w-[150px]"
       />
     </Link>
   );

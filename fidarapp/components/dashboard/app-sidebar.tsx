@@ -171,8 +171,9 @@ export function AppSidebar({
               <Image
                 src="/Fidara-logo-blanco.png"
                 alt="Fidara"
-                width={142}
-                height={42}
+                width={300}
+                height={100}
+                sizes="142px"
                 priority
               />
             )}

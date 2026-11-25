@@ -6,7 +6,15 @@ import {
   formatDateTime,
 } from "@/components/lib/date-time";
 import Link from "next/link";
+import { Poppins } from "next/font/google";
 import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,16 +22,19 @@ import {
   CalendarDays,
   Check,
   CreditCard,
+  Ellipsis as MoreHorizontal,
   FileSpreadsheet,
   LoaderCircle,
   Search,
   Users,
   X,
 } from "lucide-react";
-import {useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import styles from "./customers.module.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 type Customer = {
   id: string;
@@ -216,10 +227,11 @@ export default function CustomersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [error, setError] = useState("");
-  const [, setUpdatingCustomerId] = useState<string | null>(null);
+  const [updatingCustomerId, setUpdatingCustomerId] = useState<string | null>(null);
   const [statusConfirmation, setStatusConfirmation] =
     useState<StatusConfirmation>(null);
 
@@ -257,6 +269,7 @@ export default function CustomersPage() {
 
       setCustomers(payload.data ?? []);
       setPagination(payload.pagination ?? initialPagination);
+      setHasLoaded(true);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -273,17 +286,6 @@ export default function CustomersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCustomers();
   }, [loadCustomers]);
-
-  useEffect(() => {
-    if (!statusConfirmation) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [statusConfirmation]);
 
 useEffect(() => {
   const timeout = window.setTimeout(() => {
@@ -308,10 +310,10 @@ useEffect(() => {
   }
 
   async function toggleCustomerStatus(customer: Customer) {
+    if (updatingCustomerId) return;
     const nextStatus = !customer.isActive;
 
     setUpdatingCustomerId(customer.id);
-    setStatusConfirmation(null);
     setError("");
 
     try {
@@ -354,6 +356,7 @@ useEffect(() => {
       });
     } finally {
       setUpdatingCustomerId(null);
+      setStatusConfirmation(null);
     }
   }
 
@@ -607,15 +610,20 @@ useEffect(() => {
     }
   }
 
+  const initialLoading = loading && !hasLoaded;
+
+  if (initialLoading) {
+    return <CustomersSkeleton />;
+  }
+
   return (
-    <main className={styles.page}>
+    <main className={styles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">
+        {loading ? "Actualizando clientes…" : ""}
+      </span>
       <section className={styles.heading}>
         <div>
-          <span className={styles.eyebrow}>COMUNIDAD</span>
           <h1>Clientes</h1>
-          <p>
-            Consulta sus tarjetas, actividad y progreso dentro de tus programas.
-          </p>
         </div>
 
         <div className={styles.headingActions}>
@@ -644,7 +652,7 @@ useEffect(() => {
         </div>
       )}
 
-      <section className={styles.panel}>
+      <section className={styles.panel} aria-busy={loading}>
         <div className={styles.toolbar}>
 <div className={styles.searchBox}>
   <Search size={18} />
@@ -675,6 +683,7 @@ useEffect(() => {
                 key={filter}
                 type="button"
                 className={statusFilter === filter ? styles.selectedFilter : ""}
+                aria-pressed={statusFilter === filter}
                 onClick={() => changeStatusFilter(filter)}
               >
                 {filter === "all"
@@ -687,12 +696,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {loading ? (
-          <div className={styles.loadingState}>
-            <LoaderCircle className={styles.spinner} size={28} />
-            <span>Cargando clientes…</span>
-          </div>
-        ) : customers.length === 0 ? (
+        {customers.length === 0 ? (
           <div className={styles.emptyState}>
             <span>
               <Users size={29} />
@@ -715,55 +719,50 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            <div className={styles.listHeader}>
-              <span>Cliente</span>
-              <span>Tarjetas</span>
-              <span>Cumpleaños</span>
-              <span>Última actividad</span>
-            </div>
+            <CustomersListHeader />
 
             <div className={styles.customerList}>
               {customers.map((customer) => {
+                const profileHref = "/dashboard/clientes/" + customer.id;
+                const openProfile = () => router.push(profileHref);
+
                 return (
                   <article
-  className={styles.customerRow}
-  key={customer.id}
-  role="link"
-  tabIndex={0}
-  onClick={(event) => {
-    const target = event.target as HTMLElement;
-
-    if (target.closest("button, a")) return;
-
-    router.push(`/dashboard/clientes/${customer.id}`);
-  }}
-  onKeyDown={(event) => {
-    if (
-      event.target === event.currentTarget &&
-      (event.key === "Enter" || event.key === " ")
-    ) {
-      event.preventDefault();
-      router.push(`/dashboard/clientes/${customer.id}`);
-    }
-  }}
->
+                    className={styles.customerRow}
+                    key={customer.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      const target = event.target as Element;
+                      if (target.closest("button, a, [role='menuitem']")) return;
+                      openProfile();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        openProfile();
+                      }
+                    }}
+                  >
                     <div className={styles.customerIdentity}>
                       <span className={styles.avatar}>
                         {getInitials(customer)}
                       </span>
                       <div>
-                        <Link href={`/dashboard/clientes/${customer.id}`}>
+                        <Link href={profileHref}>
                           {customer.fullName}
                         </Link>
-                        <span>
-                          {customer.email ??
-                            customer.phone ??
-                            "Sin información de contacto"}
-                        </span>
-                        {customer.email && customer.phone && (
-                          <small>{customer.phone}</small>
-                        )}
                       </div>
+                    </div>
+
+                    <div className={styles.customerEmail}>
+                      <small>Correo</small>
+                      <span>{customer.email?.trim() || "—"}</span>
+                    </div>
+
+                    <div className={styles.customerPhone}>
+                      <small>Teléfono</small>
+                      <span>{customer.phone?.trim() || "—"}</span>
                     </div>
 
                     <div className={styles.customerCards}>
@@ -796,6 +795,33 @@ useEffect(() => {
                       </strong>
                     </div>
 
+                    <div className={styles.customerActions}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          aria-label={"Acciones para " + customer.fullName}
+                          className={styles.actionsTrigger}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontal size={20} aria-hidden="true" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className={poppins.className + " min-w-40 border border-[#E5E7EB] bg-white p-1.5 text-[#111827] shadow-lg ring-0"}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <DropdownMenuItem onClick={openProfile} className={styles.actionItem}>
+                            Ver más
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={Boolean(updatingCustomerId)}
+                            onClick={() => setStatusConfirmation({ customer, nextStatus: !customer.isActive })}
+                            className={styles.actionItem}
+                          >
+                            {customer.isActive ? "Desactivar" : "Activar"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </article>
                 );
               })}
@@ -812,7 +838,7 @@ useEffect(() => {
               <div>
                 <button
                   type="button"
-                  disabled={!pagination.hasPreviousPage}
+                  disabled={loading || !pagination.hasPreviousPage}
                   onClick={() => setPage((current) => Math.max(current - 1, 1))}
                 >
                   <ArrowLeft size={17} />
@@ -820,7 +846,8 @@ useEffect(() => {
                 </button>
                 <button
                   type="button"
-                  disabled={!pagination.hasNextPage}
+                  className={styles.nextPage}
+                  disabled={loading || !pagination.hasNextPage}
                   onClick={() => setPage((current) => current + 1)}
                 >
                   Siguiente
@@ -833,88 +860,96 @@ useEffect(() => {
       </section>
 
       {statusConfirmation && (
-        <div
-          className={styles.confirmBackdrop}
-          role="presentation"
-          onMouseDown={() => setStatusConfirmation(null)}
-        >
-          <section
-            className={styles.confirmDialog}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="customer-status-dialog-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className={styles.confirmHeading}>
-              <span
-                className={
-                  statusConfirmation.nextStatus
-                    ? styles.confirmIconSuccess
-                    : styles.confirmIconDanger
-                }
-              >
-                {statusConfirmation.nextStatus ? (
-                  <Check size={22} />
-                ) : (
-                  <AlertTriangle size={22} />
-                )}
-              </span>
-
-              <h2 id="customer-status-dialog-title">
-                {statusConfirmation.nextStatus
-                  ? "¿Reactivar cliente?"
-                  : "¿Desactivar cliente?"}
-              </h2>
-
-              <button
-                type="button"
-                className={styles.confirmClose}
-                onClick={() => setStatusConfirmation(null)}
-                aria-label="Cerrar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p>
-              {statusConfirmation.nextStatus
-                ? `${statusConfirmation.customer.fullName} volverá a aparecer como cliente activo.`
-                : `${statusConfirmation.customer.fullName} será desactivado, pero conservará sus tarjetas y su historial.`}
-            </p>
-
-            <div className={styles.confirmActions}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={() => setStatusConfirmation(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className={
-                  statusConfirmation.nextStatus
-                    ? styles.confirmSuccessButton
-                    : styles.confirmDangerButton
-                }
-                onClick={() =>
-                  void toggleCustomerStatus(statusConfirmation.customer)
-                }
-              >
-                {statusConfirmation.nextStatus ? (
-                  <Check size={17} />
-                ) : (
-                  <X size={17} />
-                )}
-                {statusConfirmation.nextStatus
-                  ? "Sí, reactivar"
-                  : "Sí, desactivar"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <FidaraConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStatusConfirmation(null);
+          }}
+          busy={Boolean(updatingCustomerId)}
+          icon={statusConfirmation.nextStatus ? <Check size={22} /> : <AlertTriangle size={22} />}
+          iconClassName={statusConfirmation.nextStatus ? "bg-emerald-50 text-emerald-700" : undefined}
+          title={statusConfirmation.nextStatus ? "¿Reactivar cliente?" : "¿Desactivar cliente?"}
+          description={
+            statusConfirmation.nextStatus
+              ? statusConfirmation.customer.fullName + " volverá a aparecer como cliente activo."
+              : statusConfirmation.customer.fullName + " será desactivado, pero conservará sus tarjetas y su historial."
+          }
+          confirmLabel={statusConfirmation.nextStatus ? "Sí, reactivar" : "Sí, desactivar"}
+          confirmClassName={statusConfirmation.nextStatus ? "bg-[#047857] hover:bg-[#065F46] shadow-emerald-700/20" : undefined}
+          onConfirm={() => void toggleCustomerStatus(statusConfirmation.customer)}
+        />
       )}
 
+    </main>
+  );
+}
+
+function CustomersListHeader({ skeleton = false }: { skeleton?: boolean }) {
+  return (
+    <div className={styles.listHeader}>
+      {["Cliente", "Correo", "Teléfono", "Tarjetas", "Cumpleaños", "Última actividad", "Acciones"].map((label) => (
+        skeleton ? <span key={label} className={styles.skeletonLine} /> : <span key={label}>{label}</span>
+      ))}
+    </div>
+  );
+}
+
+function CustomersSkeleton() {
+  return (
+    <main className={styles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">Cargando clientes…</span>
+      <div
+        aria-hidden="true"
+        className={styles.page + " " + styles.skeleton + " motion-safe:animate-pulse motion-safe:[animation-duration:2.5s]"}
+      >
+        <section className={styles.heading}>
+          <div className={styles.skeletonTitle} />
+          <div className={styles.headingActions}>
+            <span className={styles.skeletonExport} />
+          </div>
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.toolbar}>
+            <div className={styles.searchBox}>
+              <span className={styles.skeletonSearchIcon} />
+              <span className={styles.skeletonSearchText} />
+            </div>
+            <div className={styles.filters}>
+              {["all", "active", "inactive"].map((filter) => (
+                <span className={styles.skeletonFilter} key={filter} />
+              ))}
+            </div>
+          </div>
+
+          <CustomersListHeader skeleton />
+          <div className={styles.customerList}>
+            {Array.from({ length: 6 }, (_, index) => (
+              <div className={styles.customerRow} key={index}>
+                <div className={styles.customerIdentity}>
+                  <div className={styles.skeletonAvatar} />
+                  <div className={styles.skeletonName} />
+                </div>
+                {[styles.customerEmail, styles.customerPhone, styles.customerCards, styles.customerBirthday, styles.customerActivity].map((cell) => (
+                  <div className={cell} key={cell}>
+                    <small><span className={styles.skeletonLine} /></small>
+                    <span className={styles.skeletonValue} />
+                  </div>
+                ))}
+                <div className={styles.customerActions}><span className={styles.skeletonAction} /></div>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.pagination}>
+            <span className={styles.skeletonSummary} />
+            <div>
+              <span className={styles.skeletonPageButton} />
+              <span className={styles.skeletonPageButton} />
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

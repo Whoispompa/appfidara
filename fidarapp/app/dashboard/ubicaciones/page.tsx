@@ -1,9 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Poppins } from "next/font/google";
 import {
   AlertTriangle,
   Building2,
+  CircleCheck,
+  Ellipsis as MoreHorizontal,
   LoaderCircle,
   MapPin,
   Pencil,
@@ -20,8 +23,17 @@ import {
   type FormEvent,
 } from "react";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
+import customerStyles from "../clientes/customers.module.css";
 import styles from "./locations.module.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 const GooglePlacePicker = dynamic(
   () => import("@/components/locations/google-place-picker"),
@@ -77,23 +89,21 @@ const emptyForm: LocationForm = {
 };
 
 function getAddress(location: Location) {
-  const firstLine = [location.addressLine1, location.addressLine2]
-    .filter(Boolean)
-    .join(", ");
-
-  const secondLine = [
+  const parts = [
+    location.addressLine1,
+    location.addressLine2,
     location.city,
     location.state,
     location.postalCode,
     location.country,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  ].flatMap((value) => value?.split(",").map((part) => part.trim()).filter(Boolean) ?? []);
 
-  return (
-    [firstLine, secondLine].filter(Boolean).join(" · ") ||
-    "Sin dirección registrada"
-  );
+  const unique = new Map<string, string>();
+  for (const part of parts) {
+    const key = part.normalize("NFC").toLocaleLowerCase("es-MX").replace(/\s+/g, " ");
+    if (!unique.has(key)) unique.set(key, part);
+  }
+  return Array.from(unique.values()).join(", ") || "Sin dirección registrada";
 }
 
 function toForm(location: Location): LocationForm {
@@ -113,6 +123,7 @@ function toForm(location: Location): LocationForm {
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -145,6 +156,7 @@ export default function LocationsPage() {
       }
 
       setLocations(payload.data ?? []);
+      setHasLoaded(true);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -377,30 +389,30 @@ export default function LocationsPage() {
     }
   }
 
+  if (loading && !hasLoaded) return <LocationsSkeleton />;
+
   return (
-    <main className={styles.page}>
-      <section className={styles.heading}>
+    <main className={customerStyles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">{loading ? "Actualizando sucursales…" : ""}</span>
+      <section className={customerStyles.heading}>
         <div>
-          <span className={styles.eyebrow}>UBICACIÓN</span>
           <h1>Sucursales</h1>
         </div>
 
-        <div className={styles.headingActions}>
+        <div className={customerStyles.headingActions}>
           <button
             className={styles.primaryButton}
             type="button"
             onClick={openCreateForm}
           >
-            <Plus size={19} />
+            <Plus size={18} aria-hidden="true" />
             Nueva sucursal
           </button>
         </div>
       </section>
 
-     
-
       {error && !formOpen && (
-        <div className={styles.errorBox}>
+        <div className={customerStyles.errorBox}>
           <span>{error}</span>
           <button type="button" onClick={() => void loadLocations()}>
             Reintentar
@@ -408,24 +420,26 @@ export default function LocationsPage() {
         </div>
       )}
 
-      <section className={styles.panel}>
-        <div className={styles.toolbar}>
-          <label className={styles.searchBox}>
-            <Search size={18} />
+      <section className={customerStyles.panel + " " + styles.panel} aria-busy={loading}>
+        <div className={customerStyles.toolbar + " " + styles.toolbar}>
+          <label className={customerStyles.searchBox + " " + styles.searchBox}>
+            <Search size={18} aria-hidden="true" />
             <input
               type="search"
               placeholder="Buscar ubicación o dirección"
+              aria-label="Buscar ubicación o dirección"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
 
-          <div className={styles.filters}>
+          <div className={customerStyles.filters + " " + styles.filters}>
             {(["all", "active", "inactive"] as const).map((filter) => (
               <button
                 key={filter}
                 type="button"
-                className={statusFilter === filter ? styles.selectedFilter : ""}
+                className={statusFilter === filter ? customerStyles.selectedFilter : ""}
+                aria-pressed={statusFilter === filter}
                 onClick={() => setStatusFilter(filter)}
               >
                 {filter === "all"
@@ -438,15 +452,10 @@ export default function LocationsPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className={styles.loadingState}>
-            <LoaderCircle className={styles.spinner} size={28} />
-            <span>Cargando sucursales…</span>
-          </div>
-        ) : filteredLocations.length === 0 ? (
-          <div className={styles.emptyState}>
+        {filteredLocations.length === 0 ? (
+          <div className={customerStyles.emptyState}>
             <span>
-              <MapPin size={28} />
+              <MapPin size={28} aria-hidden="true" />
             </span>
             <h2>
               {locations.length === 0
@@ -467,31 +476,23 @@ export default function LocationsPage() {
           </div>
         ) : (
           <div className={styles.locationList}>
-            <div className={styles.listHeader} aria-hidden="true">
-              <span>Sucursal</span>
-              <span>Estado</span>
-              <span>Movimientos</span>
-              <span>Ubicación</span>
-              <span className={styles.actionsHeader}>Acciones</span>
-            </div>
+            <LocationsListHeader />
 
             {filteredLocations.map((location) => {
               const verified =
                 location.latitude !== null && location.longitude !== null;
+              const address = getAddress(location);
 
               return (
                 <article className={styles.locationRow} key={location.id}>
                   <div className={styles.locationMain}>
                     <span className={styles.locationIcon}>
-                      <Building2 size={21} />
+                      <MapPin size={21} aria-hidden="true" />
                     </span>
 
                     <div className={styles.locationCopy}>
-                      <h2>{location.name}</h2>
-                      <p className={styles.locationAddress}>
-                        <MapPin size={14} />
-                        <span>{getAddress(location)}</span>
-                      </p>
+                      <h2 title={location.name}>{location.name}</h2>
+                      <p className={styles.locationAddress} title={address}>{address}</p>
                     </div>
                   </div>
 
@@ -509,12 +510,12 @@ export default function LocationsPage() {
                     </span>
                   </div>
 
-                  <div className={styles.dataCell}>
+                  <div className={styles.movementsCell}>
                     <small className={styles.cellLabel}>Movimientos</small>
                     <strong>{location.transactionsCount}</strong>
                   </div>
 
-                  <div className={styles.dataCell}>
+                  <div className={styles.verificationCell}>
                     <small className={styles.cellLabel}>Ubicación</small>
                     <span
                       className={
@@ -523,43 +524,37 @@ export default function LocationsPage() {
                           : styles.pendingLocation
                       }
                     >
-                      <MapPin size={14} />
+                      {verified ? <CircleCheck size={15} aria-hidden="true" /> : <MapPin size={15} aria-hidden="true" />}
                       {verified ? "Verificada" : "Pendiente"}
                     </span>
                   </div>
 
                   <div className={styles.rowActions}>
-                    <button
-                      type="button"
-                      className={styles.editAction}
-                      onClick={() => openEditForm(location)}
-                    >
-                      <Pencil size={15} />
-                      Editar
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        location.isActive
-                          ? styles.deactivateAction
-                          : styles.activateAction
-                      }
-                      disabled={changingStatusId === location.id}
-                      onClick={() =>
-                        setStatusConfirmation({
-                          location,
-                          nextStatus: !location.isActive,
-                        })
-                      }
-                    >
-                      {changingStatusId === location.id ? (
-                        <LoaderCircle className={styles.spinner} size={15} />
-                      ) : (
-                        <Power size={15} />
-                      )}
-                      {location.isActive ? "Archivar" : "Reactivar"}
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={"Acciones para " + location.name}
+                        className={styles.actionsTrigger}
+                      >
+                        <MoreHorizontal size={20} aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className={poppins.className + " min-w-40 border border-[#E5E7EB] bg-white p-1.5 text-[#111827] shadow-lg ring-0"}
+                      >
+                        <DropdownMenuItem className={styles.actionItem} onClick={() => openEditForm(location)}>
+                          <Pencil size={16} aria-hidden="true" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className={styles.actionItem + " " + (location.isActive ? styles.archiveItem : styles.reactivateItem)}
+                          disabled={Boolean(changingStatusId)}
+                          onClick={() => setStatusConfirmation({ location, nextStatus: !location.isActive })}
+                        >
+                          <Power size={16} aria-hidden="true" />
+                          {location.isActive ? "Archivar" : "Reactivar"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </article>
               );
@@ -583,7 +578,7 @@ export default function LocationsPage() {
           >
             <div className={styles.modalHeader}>
               <div>
-                <span className={styles.eyebrow}>
+                <span className={customerStyles.eyebrow}>
                   {editing ? "EDITAR SUCURSAL" : "NUEVA SUCURSAL"}
                 </span>
                 <h2 id="location-form-title">
@@ -706,6 +701,73 @@ export default function LocationsPage() {
         }}
       />
 
+    </main>
+  );
+}
+
+function LocationsListHeader({ skeleton = false }: { skeleton?: boolean }) {
+  return (
+    <div className={styles.listHeader}>
+      {["Sucursal", "Estado", "Movimientos", "Ubicación", "Acciones"].map((label) => (
+        <span key={label} className={skeleton ? styles.skeletonLabel : undefined}>
+          {skeleton ? null : label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function LocationsSkeleton() {
+  return (
+    <main className={customerStyles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">Cargando sucursales…</span>
+      <div
+        aria-hidden="true"
+        className={customerStyles.page + " " + customerStyles.skeleton + " motion-safe:animate-pulse motion-safe:[animation-duration:2.5s]"}
+      >
+        <section className={customerStyles.heading}>
+          <span className={customerStyles.skeletonTitle + " " + styles.skeletonTitle} />
+          <div className={customerStyles.headingActions}>
+            <span className={customerStyles.skeletonExport + " " + styles.skeletonCreate} />
+          </div>
+        </section>
+
+        <section className={customerStyles.panel + " " + styles.panel}>
+          <div className={customerStyles.toolbar + " " + styles.toolbar}>
+            <div className={customerStyles.searchBox + " " + styles.searchBox}>
+              <span className={customerStyles.skeletonSearchIcon} />
+              <span className={customerStyles.skeletonSearchText} />
+            </div>
+            <div className={customerStyles.filters + " " + styles.filters}>
+              {["all", "active", "inactive"].map((filter) => (
+                <span className={customerStyles.skeletonFilter + " " + styles.skeletonFilter} key={filter} />
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.locationList}>
+            <LocationsListHeader skeleton />
+            {Array.from({ length: 6 }, (_, index) => (
+              <div className={styles.locationRow} key={index}>
+                <div className={styles.locationMain}>
+                  <span className={styles.locationIcon + " " + styles.placeholder} />
+                  <div className={styles.skeletonIdentity}>
+                    <span className={styles.skeletonName} />
+                    <span className={styles.skeletonAddress} />
+                  </div>
+                </div>
+                {[styles.statusCell, styles.movementsCell, styles.verificationCell].map((cell) => (
+                  <div key={cell} className={cell}>
+                    <small className={styles.cellLabel}><span className={styles.skeletonLabel} /></small>
+                    <span className={styles.skeletonValue} />
+                  </div>
+                ))}
+                <div className={styles.rowActions}><span className={styles.skeletonAction} /></div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
