@@ -3,8 +3,10 @@ import Link from "next/link";
 
 export function FidaraLogo({
   className = "",
+  variant = "light",
 }: {
   className?: string;
+  variant?: "light" | "dark";
 }) {
   return (
     <Link
@@ -13,7 +15,7 @@ export function FidaraLogo({
       aria-label="Fidara, inicio"
     >
       <Image
-        src="/Fidara-logo-blanco.png"
+        src={variant === "dark" ? "/Fidara-logo-horizontal.png" : "/Fidara-logo-blanco.png"}
         alt="Fidara"
         width={300}
         height={100}

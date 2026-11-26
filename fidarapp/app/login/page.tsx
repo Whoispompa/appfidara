@@ -5,9 +5,10 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { AuthShell } from "@/components/auth-shell";
+import { AuthEntry, AuthField } from "@/components/auth-entry";
+import styles from "@/components/auth-entry.module.css";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -83,81 +84,67 @@ export default function LoginPage() {
     }
   }
   return (
-    <AuthShell mode="login">
-      <div className="form-wrap">
-        <span className="form-kicker">Bienvenido de vuelta</span>
-        <h2>
-          Tu negocio,
-          <br />
-          en movimiento.
-        </h2>
-        <p className="form-intro">
-        </p>
-        <form className="auth-form" onSubmit={submit}>
-          {error && (
-            <div className="error-box" role="alert">
-              {error}
-            </div>
-          )}
-          <div className="field-group">
-            <label htmlFor="email">Correo electrónico</label>
+    <AuthEntry mode="login" title="Ingresa a tu panel">
+      <form className="auth-form" onSubmit={submit}>
+        {error && (
+          <div className="error-box" role="alert">
+            {error}
+          </div>
+        )}
+        <AuthField
+          id="email"
+          label="Correo electrónico"
+          icon={Mail}
+          type="email"
+          autoComplete="email"
+          placeholder="Correo electrónico"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <AuthField
+          id="password"
+          label="Contraseña"
+          icon={LockKeyhole}
+          type={showPassword ? "text" : "password"}
+          autoComplete="current-password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          action={
+            <button
+              className="password-toggle"
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          }
+        />
+        <div className="form-meta">
+          <label className="check-line">
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="tu@negocio.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field-group">
-            <label htmlFor="password">Contraseña</label>
-            <div className="password-wrap">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="Tu contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button
-                className="password-toggle"
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={
-                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                }
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-          <div className="form-meta">
-            <label className="check-line">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />{" "}
-              Mantener mi sesión
-            </label>
-            <Link className="text-link" href="/recuperar">
-              Olvidé mi contraseña
-            </Link>
-          </div>
-          <button className="submit-button" disabled={loading}>
-            {loading ? "Entrando…" : "Entrar a Fidara"}
-          </button>
-        </form>
-        <p className="form-foot">
-          Al continuar aceptas nuestros <a href="#">Términos</a> y{" "}
-          <a href="#">Aviso de privacidad</a>.
-        </p>
-      </div>
-
-    </AuthShell>
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />{" "}
+            Mantener mi sesión
+          </label>
+          <Link className="text-link" href="/recuperar">
+            Olvidé mi contraseña
+          </Link>
+        </div>
+        <button className="submit-button" disabled={loading} aria-busy={loading}>
+          {loading && <LoaderCircle className={styles.spinner} size={17} aria-hidden="true" />}
+          {loading ? "Entrando…" : "Entrar a Fidara"}
+        </button>
+      </form>
+      <p className="form-foot">
+        Al continuar aceptas nuestros <a href="#">Términos</a> y{" "}
+        <a href="#">Aviso de privacidad</a>.
+      </p>
+    </AuthEntry>
   );
 }

@@ -1,0 +1,330 @@
+.login:global(.auth-page) {
+  --login-accent: #e11d48;
+  --login-accent-hover: #be123c;
+  --login-control: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 53fr) minmax(0, 47fr);
+  min-height: 100dvh;
+}
+
+.login :global(.brand-panel),
+.login :global(.form-panel) {
+  min-width: 0;
+  min-height: 0;
+}
+
+.login :global(.brand-panel) {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100dvh;
+  gap: clamp(10px, 2.1dvh, 24px);
+  padding: clamp(16px, 5dvh, 64px) 0 0;
+  background: #100d10;
+}
+
+.login :global(.brand-panel)::before {
+  background: radial-gradient(ellipse at 18% 25%, #35151f 0%, transparent 64%),
+    radial-gradient(ellipse at 85% 100%, #230f1a 0%, transparent 56%);
+}
+
+.login :global(.brand-panel)::after {
+  content: none;
+}
+
+.login :global(.brand-panel > .wordmark) {
+  justify-self: center;
+}
+
+.login :global(.brand-panel > .wordmark img) {
+  width: clamp(148px, 24dvh, 182px);
+  height: auto;
+}
+
+.login :global(.hero-copy) {
+  margin-top: 0;
+  justify-self: center;
+  padding-inline: clamp(16px, 3vw, 50px);
+  text-align: center;
+}
+
+.login :global(.hero-copy h1) {
+  margin: 0;
+  font-size: clamp(24px, min(3.75vw, 7dvh), 62px);
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.illustrationFrame {
+  position: relative;
+  min-height: 0;
+}
+
+.brandIllustration {
+  display: block;
+  position: absolute;
+  inset: auto 0 0;
+  margin-inline: auto;
+  max-width: 96%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
+.login :global(.form-panel) {
+  padding: clamp(18px, 3.2dvh, 36px) clamp(26px, 4.4vw, 76px);
+}
+
+.login :global(.form-nav) {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  line-height: 1.4;
+}
+
+.login :global(.form-nav a) {
+  padding: 8px 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.login :global(.form-nav a:hover) {
+  transform: none;
+}
+
+.login :global(.form-wrap) {
+  width: min(100%, 500px);
+  padding: clamp(14px, 2.5dvh, 32px) 0;
+  container-type: inline-size;
+}
+
+.login .formLogo {
+  display: none;
+  width: fit-content;
+  margin: 0 auto clamp(12px, 2.2dvh, 24px);
+}
+
+.login .formLogo img {
+  width: clamp(162px, 13vw, 182px);
+  height: auto;
+}
+
+.login :global(.form-wrap h2) {
+  margin-bottom: clamp(17px, 3dvh, 27px);
+  font-size: clamp(32px, 3.6vw, 50px);
+  font-weight: 600;
+  line-height: 1.09;
+  text-align: center;
+}
+
+.login :global(.auth-form) {
+  gap: clamp(16px, 2.3dvh, 20px);
+}
+
+.login:global(.register-page) :global(.auth-form) {
+  gap: clamp(10px, 1.6dvh, 14px);
+}
+
+.login :global(.field-grid) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.login .businessRow {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.login :global(.form-wrap h2):has(+ .subtitle) {
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  margin: 0 0 clamp(12px, 2dvh, 20px);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+@container (width < 445px) {
+  .login :global(.field-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.login :global(.text-link) {
+  font-weight: 600;
+}
+
+.inputField {
+  position: relative;
+  --login-field-surface: #f5f4f2;
+}
+
+.fieldIcon {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 14px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.login .inputField input {
+  padding-inline-start: 42px;
+  background: var(--login-field-surface);
+}
+
+.login .inputField input::placeholder {
+  color: var(--muted);
+}
+
+.login :global(.field-group input),
+.login :global(.submit-button) {
+  min-height: var(--login-control);
+  height: var(--login-control);
+  font-size: 16px;
+}
+
+.login:global(.register-page) :global(.field-group input) {
+  height: var(--login-control);
+}
+
+.login :global(.field-group input:focus) {
+  border-color: var(--login-accent);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px #e11d4814;
+}
+
+.login .inputField input:is(:autofill, :-webkit-autofill) {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: inset 0 0 0 100px var(--login-field-surface);
+}
+
+.login :global(.password-toggle) {
+  display: grid;
+  place-items: center;
+  top: 2px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+}
+
+.login :global(.password-toggle:focus-visible) {
+  outline: 2px solid #716c67;
+  outline-offset: -5px;
+}
+
+.login :global(.password-wrap input) {
+  padding-right: 52px;
+}
+
+.login :global(.form-meta) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.login :global(.check-line input) {
+  flex-shrink: 0;
+  accent-color: var(--login-accent);
+}
+
+.login :global(.text-link:hover) {
+  color: var(--login-accent-hover);
+  text-decoration: underline;
+}
+
+.login :global(.submit-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--login-accent);
+  font-weight: 600;
+  box-shadow: none;
+  transition: background-color 160ms ease;
+}
+
+.login :global(.submit-button:hover:not(:disabled)) {
+  background: var(--login-accent-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.login :global(.submit-button:disabled) {
+  color: #881337;
+  background: #fbcdd8;
+  opacity: 1;
+}
+
+.login :global(a:focus-visible),
+.login :global(button:focus-visible),
+.login :global(input[type="checkbox"]:focus-visible) {
+  outline: 2px solid var(--login-accent);
+  outline-offset: 3px;
+}
+
+.login :global(.form-foot) {
+  margin-top: 15px;
+  color: #625b55;
+}
+
+.spinner {
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (768px <= width < 1024px) {
+  .login:global(.auth-page) {
+    grid-template-columns: minmax(0, 40fr) minmax(0, 60fr);
+  }
+}
+
+@media (width < 768px) {
+  .login:global(.auth-page) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login :global(.brand-panel) {
+    display: none;
+  }
+
+  .login :global(.form-panel) {
+    padding: max(16px, env(safe-area-inset-top))
+      max(18px, env(safe-area-inset-right))
+      max(18px, env(safe-area-inset-bottom))
+      max(18px, env(safe-area-inset-left));
+  }
+
+  .login .formLogo {
+    display: flex;
+  }
+
+  .login :global(.form-nav > span) {
+    display: block;
+  }
+
+  .login :global(.form-wrap) {
+    padding-block: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login :global(.form-nav a),
+  .login :global(.field-group input),
+  .login :global(.submit-button) {
+    transition: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
+}

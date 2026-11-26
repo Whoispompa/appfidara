@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Check,
   Clock3,
+  Ellipsis as MoreHorizontal,
   LoaderCircle,
   MapPin,
   Pencil,
@@ -13,7 +14,6 @@ import {
   Power,
   Search,
   ShieldCheck,
-  UserRound,
   UsersRound,
   X,
 } from "lucide-react";
@@ -24,9 +24,21 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Poppins } from "next/font/google";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import customerStyles from "../clientes/customers.module.css";
 
 import styles from "./team.module.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
+const filters = ["all", "active", "inactive"] as const;
+const columns = ["Integrante", "Rol", "Sucursales asignadas", "Estado", "Último acceso", "Acciones"];
 
 type LocationOption = {
   id: string;
@@ -115,6 +127,7 @@ export default function TeamPage() {
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -161,6 +174,7 @@ export default function TeamPage() {
 
       setMembers(teamPayload.data ?? []);
       setLocations(locationsPayload.data ?? []);
+      setHasLoaded(true);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -210,11 +224,6 @@ export default function TeamPage() {
         .some((value) => value!.toLowerCase().includes(normalizedSearch));
     });
   }, [members, search, statusFilter]);
-
-  const activeCount = members.filter((member) => member.isActive).length;
-  const operatorsCount = members.filter(
-    (member) => member.role === 3 || member.role === 4,
-  ).length;
 
   function openCreateForm() {
     setEditing(null);
@@ -405,67 +414,28 @@ export default function TeamPage() {
     }
   }
 
+  if (loading && !hasLoaded) return <TeamSkeleton />;
+
   return (
-    <main className={styles.page}>
-      <section className={styles.heading}>
+    <main className={customerStyles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">{loading ? "Actualizando equipo…" : ""}</span>
+      <section className={customerStyles.heading}>
         <div>
-          <span className={styles.eyebrow}>ADMINISTRACIÓN</span>
           <h1>Equipo</h1>
-          <p>Administra quién puede operar  y en qué sucursales.</p>
+          <p>Administra quién puede operar y en qué sucursales.</p>
         </div>
-
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={openCreateForm}
-          disabled={locations.length === 0}
-        >
-          <Plus size={19} />
-          Agregar integrante
-        </button>
+        <div className={customerStyles.headingActions}>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={openCreateForm}
+            disabled={locations.length === 0}
+          >
+            <Plus size={18} aria-hidden="true" />
+            Agregar integrante
+          </button>
+        </div>
       </section>
-
-      {/* <section className={styles.metrics}>
-        <article>
-          <span className={`${styles.metricIcon} ${styles.pink}`}>
-            <UsersRound size={21} />
-          </span>
-          <div>
-            <small>Integrantes</small>
-            <strong>{members.length}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.green}`}>
-            <Check size={21} />
-          </span>
-          <div>
-            <small>Accesos activos</small>
-            <strong>{activeCount}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.yellow}`}>
-            <UserRound size={21} />
-          </span>
-          <div>
-            <small>Personal operativo</small>
-            <strong>{operatorsCount}</strong>
-          </div>
-        </article>
-
-        <article>
-          <span className={`${styles.metricIcon} ${styles.lilac}`}>
-            <Building2 size={21} />
-          </span>
-          <div>
-            <small>Sucursales disponibles</small>
-            <strong>{locations.length}</strong>
-          </div>
-        </article>
-      </section> */}
 
       {error && !formOpen && (
         <div className={styles.errorBox}>
@@ -486,24 +456,26 @@ export default function TeamPage() {
         </div>
       )}
 
-      <section className={styles.panel}>
-        <div className={styles.toolbar}>
-          <label className={styles.searchBox}>
+      <section className={customerStyles.panel} aria-busy={loading}>
+        <div className={customerStyles.toolbar}>
+          <label className={customerStyles.searchBox}>
             <Search size={18} />
             <input
               type="search"
               value={search}
               placeholder="Buscar por nombre, correo, rol o sucursal"
+              aria-label="Buscar integrantes"
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
 
-          <div className={styles.filters}>
-            {(["all", "active", "inactive"] as const).map((filter) => (
+          <div className={customerStyles.filters}>
+            {filters.map((filter) => (
               <button
                 key={filter}
                 type="button"
-                className={statusFilter === filter ? styles.selectedFilter : ""}
+                className={statusFilter === filter ? customerStyles.selectedFilter : ""}
+                aria-pressed={statusFilter === filter}
                 onClick={() => setStatusFilter(filter)}
               >
                 {filter === "all"
@@ -516,13 +488,8 @@ export default function TeamPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className={styles.loadingState}>
-            <LoaderCircle className={styles.spinner} size={28} />
-            <span>Cargando equipo…</span>
-          </div>
-        ) : filteredMembers.length === 0 ? (
-          <div className={styles.emptyState}>
+        {loading && filteredMembers.length === 0 ? null : filteredMembers.length === 0 ? (
+          <div className={customerStyles.emptyState}>
             <span>
               <UsersRound size={29} />
             </span>
@@ -539,6 +506,7 @@ export default function TeamPage() {
           </div>
         ) : (
           <div className={styles.memberList}>
+            <TeamListHeader />
             {filteredMembers.map((member) => {
               const isOwner = member.role === 1;
               const changing = changingStatusId === member.organizationUserId;
@@ -549,21 +517,9 @@ export default function TeamPage() {
                   key={member.organizationUserId}
                 >
                   <div className={styles.memberPrimary}>
-                    <span className={styles.avatar}>{getInitials(member)}</span>
+                    <span className={customerStyles.avatar} aria-hidden="true">{getInitials(member)}</span>
                     <div className={styles.memberIdentity}>
-                      <div>
-                        <h2>{member.fullName}</h2>
-                        <span
-                          className={
-                            member.isActive
-                              ? styles.activeBadge
-                              : styles.inactiveBadge
-                          }
-                        >
-                          <i />
-                          {member.isActive ? "Activo" : "Inactivo"}
-                        </span>
-                      </div>
+                      <h2>{member.fullName}</h2>
                       <p>{member.email}</p>
                       {member.phone && <small>{member.phone}</small>}
                     </div>
@@ -612,57 +568,51 @@ export default function TeamPage() {
                     </div>
                   </div>
 
+                  <div className={styles.memberStatus}>
+                    <small>Estado</small>
+                    <span className={member.isActive ? styles.activeBadge : styles.inactiveBadge}>
+                      <i aria-hidden="true" />
+                      {member.isActive ? "Activo" : "Inactivo"}
+                    </span>
+                  </div>
+
                   <div className={styles.memberActivity}>
+                    <small>Último acceso</small>
                     <div>
-                      <Clock3 size={15} />
-                      <span>
-                        <small>Último acceso</small>
-                        <strong>{formatDate(member.lastLoginAt)}</strong>
-                      </span>
+                      <Clock3 size={15} aria-hidden="true" />
+                      <strong>{formatDate(member.lastLoginAt)}</strong>
                     </div>
                   </div>
 
                   <div className={styles.rowActions}>
                     {isOwner ? (
-                      <span className={styles.ownerNotice}>
-                        Propietario principal
-                      </span>
+                      <span className={styles.ownerNotice}>Propietario principal</span>
                     ) : (
-                      <>
-                        <button
-                          type="button"
-                          className={styles.editButton}
-                          onClick={() => openEditForm(member)}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          aria-label={"Acciones para " + member.fullName}
+                          className={customerStyles.actionsTrigger}
                         >
-                          <Pencil size={16} />
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          className={
-                            member.isActive
-                              ? styles.deactivateButton
-                              : styles.activateButton
-                          }
-                          disabled={changing}
-                          onClick={() =>
-                            setStatusConfirmation({
-                              member,
-                              nextStatus: !member.isActive,
-                            })
-                          }
+                          <MoreHorizontal size={20} aria-hidden="true" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className={poppins.className + " min-w-40 border border-[#E5E7EB] bg-white p-1.5 text-[#111827] shadow-lg ring-0"}
                         >
-                          {changing ? (
-                            <LoaderCircle
-                              className={styles.spinner}
-                              size={16}
-                            />
-                          ) : (
-                            <Power size={16} />
-                          )}
-                          {member.isActive ? "Desactivar" : "Activar"}
-                        </button>
-                      </>
+                          <DropdownMenuItem className={customerStyles.actionItem} onClick={() => openEditForm(member)}>
+                            <Pencil size={16} aria-hidden="true" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className={customerStyles.actionItem}
+                            disabled={changing}
+                            onClick={() => setStatusConfirmation({ member, nextStatus: !member.isActive })}
+                          >
+                            <Power size={16} aria-hidden="true" />
+                            {member.isActive ? "Desactivar" : "Activar"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 </article>
@@ -974,6 +924,75 @@ export default function TeamPage() {
         </div>
       )}
 
+    </main>
+  );
+}
+
+function TeamListHeader({ skeleton = false }: { skeleton?: boolean }) {
+  return (
+    <div className={styles.listHeader}>
+      {columns.map((column) => (
+        <span key={column} className={skeleton ? styles.skeletonBlock : undefined}>
+          {skeleton ? null : column}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function TeamSkeleton() {
+  return (
+    <main className={customerStyles.page + " " + poppins.className}>
+      <span className="sr-only" role="status">Cargando equipo…</span>
+      <div className={customerStyles.page + " " + styles.skeleton} aria-hidden="true">
+        <section className={customerStyles.heading}>
+          <div className={styles.skeletonHeading}>
+            <div className={customerStyles.skeletonTitle + " " + styles.skeletonBlock} />
+            <span className={styles.skeletonBlock} />
+          </div>
+          <div className={customerStyles.headingActions}>
+            <span className={customerStyles.skeletonExport + " " + styles.skeletonButton + " " + styles.skeletonBlock} />
+          </div>
+        </section>
+
+        <section className={customerStyles.panel}>
+          <div className={customerStyles.toolbar}>
+            <div className={customerStyles.searchBox + " " + styles.skeletonSearch}>
+              <span className={customerStyles.skeletonSearchIcon + " " + styles.skeletonBlock} />
+              <span className={customerStyles.skeletonSearchText + " " + styles.skeletonBlock} />
+            </div>
+            <div className={customerStyles.filters}>
+              {filters.map((filter) => (
+                <span key={filter} className={customerStyles.skeletonFilter + " " + styles.skeletonBlock} />
+              ))}
+            </div>
+          </div>
+          <div className={styles.memberList}>
+            <TeamListHeader skeleton />
+            {Array.from({ length: 5 }, (_, index) => (
+              <div className={styles.memberRow} key={index}>
+                <div className={styles.memberPrimary}>
+                  <span className={customerStyles.skeletonAvatar + " " + styles.skeletonBlock} />
+                  <div className={styles.skeletonIdentity}>
+                    <span className={styles.skeletonBlock} />
+                    <span className={styles.skeletonBlock} />
+                    <span className={styles.skeletonBlock} />
+                  </div>
+                </div>
+                {[styles.memberRole, styles.memberLocations, styles.memberStatus, styles.memberActivity].map((cell) => (
+                  <div key={cell} className={cell}>
+                    <small className={styles.skeletonBlock} />
+                    <span className={styles.skeletonBlock} />
+                  </div>
+                ))}
+                <div className={styles.rowActions}>
+                  <span className={customerStyles.skeletonAction + " " + styles.skeletonBlock} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

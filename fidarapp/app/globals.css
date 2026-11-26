@@ -285,25 +285,6 @@ input {
   font-size: 22px;
   letter-spacing: -0.04em;
 }
-.trust-row {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  color: #aaa49e;
-  font-size: 12px;
-}
-.trust-row span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.trust-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--mint);
-  box-shadow: 0 0 0 4px rgba(184, 234, 219, 0.12);
-}
 .form-panel {
   min-height: 100svh;
   padding: 28px clamp(28px, 6vw, 92px);

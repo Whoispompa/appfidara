@@ -1,7 +1,8 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
-import { AuthShell } from "@/components/auth-shell";
+import { Eye, EyeOff, LockKeyhole, Mail, Phone, Store, User } from "lucide-react";
+import { AuthEntry, AuthField } from "@/components/auth-entry";
+import styles from "@/components/auth-entry.module.css";
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -59,133 +60,123 @@ export default function RegisterPage() {
       setLoading(false);
     }
   }
+  function passwordToggle(label: string) {
+    return (
+      <button
+        className="password-toggle"
+        type="button"
+        onClick={() => setShowPassword((visible) => !visible)}
+        aria-label={(showPassword ? "Ocultar " : "Mostrar ") + label}
+      >
+        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    );
+  }
+
   return (
-    <AuthShell mode="register">
-      <div className="form-wrap">
-        <span className="form-kicker">14 días para probarlo</span>
-        <h2>Haz que vuelvan.</h2>
-        <p className="form-intro">
-          Crea tu negocio y publica tu primera tarjeta de lealtad.
-        </p>
-        <form className="auth-form" onSubmit={submit}>
-          {error && (
-            <div className="error-box" role="alert">
-              {error}
-            </div>
-          )}
-          <div className="field-grid">
-            <div className="field-group">
-              <label htmlFor="firstName">Nombre</label>
-              <input
-                id="firstName"
-                autoComplete="given-name"
-                placeholder="Tu nombre"
-                value={form.firstName}
-                onChange={update("firstName")}
-                required
-              />
-            </div>
-            <div className="field-group">
-              <label htmlFor="lastName">Apellido</label>
-              <input
-                id="lastName"
-                autoComplete="family-name"
-                placeholder="Tu apellido"
-                value={form.lastName}
-                onChange={update("lastName")}
-                required
-              />
-            </div>
+    <AuthEntry mode="register" title="Crea tu cuenta" subtitle="Comienza con 14 días gratis">
+      <form className="auth-form" onSubmit={submit}>
+        {error && (
+          <div className="error-box" role="alert">
+            {error}
           </div>
-          <div className="field-group">
-            <label htmlFor="businessName">Nombre del negocio</label>
-            <input
-              id="businessName"
-              autoComplete="organization"
-              placeholder="Nombre de tu Negocio"
-              value={form.businessName}
-              onChange={update("businessName")}
-              required
-            />
-          </div>
-          <div className="field-grid">
-            <div className="field-group">
-              <label htmlFor="email">Correo</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="hola@negocio.com"
-                value={form.email}
-                onChange={update("email")}
-                required
-              />
-            </div>
-            <div className="field-group">
-              <label htmlFor="phone">Teléfono</label>
-              <input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="664 000 0000"
-                value={form.phone}
-                onChange={update("phone")}
-              />
-            </div>
-          </div>
-          <div className="field-grid">
-            <div className="field-group">
-              <label htmlFor="password">Contraseña</label>
-              <div className="password-wrap">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Mínimo 8 caracteres"
-                  value={form.password}
-                  onChange={update("password")}
-                  required
-                />
-                <button
-                  className="password-toggle"
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label="Mostrar u ocultar contraseña"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-            <div className="field-group">
-              <label htmlFor="confirmPassword">Repetir contraseña</label>
-              <input
-                id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="Repite tu contraseña"
-                value={form.confirmPassword}
-                onChange={update("confirmPassword")}
-                required
-              />
-            </div>
-          </div>
-          <label className="check-line">
-            <input
-              type="checkbox"
-              checked={accepted}
-              onChange={(e) => setAccepted(e.target.checked)}
-            />{" "}
-            Acepto el aviso de privacidad y el tratamiento de mis datos.
-          </label>
-          <button className="submit-button" disabled={loading}>
-            {loading ? "Creando tu espacio…" : "Crear mi cuenta gratis"}
-          </button>
-        </form>
-        <p className="form-foot">
-          Sin tarjeta de crédito. Puedes configurar tu programa después de
-          registrarte.
-        </p>
-      </div>
-    </AuthShell>
+        )}
+        <div className="field-grid">
+          <AuthField
+            id="firstName"
+            label="Nombre"
+            icon={User}
+            autoComplete="given-name"
+            placeholder="Nombre"
+            value={form.firstName}
+            onChange={update("firstName")}
+            required
+          />
+          <AuthField
+            id="lastName"
+            label="Apellido"
+            icon={User}
+            autoComplete="family-name"
+            placeholder="Apellido"
+            value={form.lastName}
+            onChange={update("lastName")}
+            required
+          />
+        </div>
+        <div className={"field-grid " + styles.businessRow}>
+          <AuthField
+            id="businessName"
+            label="Nombre del negocio"
+            icon={Store}
+            autoComplete="organization"
+            placeholder="Nombre del negocio"
+            value={form.businessName}
+            onChange={update("businessName")}
+            required
+          />
+          <AuthField
+            id="phone"
+            label="Teléfono"
+            icon={Phone}
+            type="tel"
+            autoComplete="tel"
+            placeholder="Teléfono"
+            value={form.phone}
+            onChange={update("phone")}
+          />
+        </div>
+        <AuthField
+          id="email"
+          label="Correo electrónico"
+          icon={Mail}
+          type="email"
+          autoComplete="email"
+          placeholder="Correo electrónico"
+          value={form.email}
+          onChange={update("email")}
+          required
+        />
+        <div className="field-grid">
+          <AuthField
+            id="password"
+            label="Contraseña (mínimo 8 caracteres)"
+            icon={LockKeyhole}
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Contraseña"
+            value={form.password}
+            onChange={update("password")}
+            action={passwordToggle("contraseña")}
+            required
+          />
+          <AuthField
+            id="confirmPassword"
+            label="Repetir contraseña"
+            icon={LockKeyhole}
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Repite la clave"
+            value={form.confirmPassword}
+            onChange={update("confirmPassword")}
+            action={passwordToggle("confirmación de contraseña")}
+            required
+          />
+        </div>
+        <label className="check-line">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+          />{" "}
+          Acepto el aviso de privacidad y el tratamiento de mis datos.
+        </label>
+        <button className="submit-button" disabled={loading}>
+          {loading ? "Creando tu espacio…" : "Crear mi cuenta gratis"}
+        </button>
+      </form>
+      <p className="form-foot">
+        Sin tarjeta de crédito. Puedes configurar tu programa después de registrarte.
+      </p>
+    </AuthEntry>
   );
 }
