@@ -26,7 +26,7 @@ Referencia compacta de la estructura real del frontend Next.js (App Router). Las
 | `/dashboard/estadisticas` | Métricas por periodo, programa, empleado y sucursal | `app/dashboard/estadisticas/page.tsx` |
 | `/dashboard/notificaciones` | Campañas y configuración GeoPush | `app/dashboard/notificaciones/page.tsx` |
 | `/dashboard/perfil` | Perfil, contraseña y suscripción | `app/dashboard/perfil/page.tsx` |
-| `/dashboard/configuracion` | Identidad visual del negocio | `app/dashboard/configuracion/page.tsx` |
+| `/dashboard/configuracion` | Identidad del negocio y consulta de logos Wallet | `app/dashboard/configuracion/page.tsx` |
 
 Estructura raíz: `app/layout.tsx` carga fuente, `app/globals.css` y `Toaster`; `app/dashboard/layout.tsx` envuelve todo el panel con `DashboardShell`.
 
@@ -56,13 +56,14 @@ No existe un directorio `services/`: las llamadas cliente están colocadas en p�
 | `api/dashboard/summary` | `GET` | Dashboard |
 | `api/customers`, `api/customers/[customerId]`, `.../status` | `GET`, `PATCH` | Clientes y detalle |
 | `api/locations`, `api/locations/[locationId]`, `.../status` | `GET`, `POST`, `PUT`, `PATCH` | Ubicaciones, equipo y notificaciones |
-| `api/programs`, `api/programs/current`, `api/programs/[programId]` | `GET`, `POST`, `PUT`, `DELETE` | Tarjetas, editor, material y marketing |
+| `api/programs`, `api/programs/current`, `api/programs/[programId]` | `GET`, `POST`, `PUT`, `DELETE` | Tarjetas, editor, material, marketing y consulta de logos Wallet |
 | `api/programs/[programId]/geo-push` | `GET`, `PUT` | `GeoPushPanel` |
 | `api/team`, `api/team/[organizationUserId]`, `.../status`, `api/team/me/locations` | `GET`, `POST`, `PUT`, `PATCH` | Equipo y sucursales permitidas |
 | `api/statistics/overview` | `GET` | Estadísticas |
 | `api/notifications`, `api/notifications/[campaignId]` | `GET`, `POST` | Campañas/notificaciones |
 | `api/profile`, `api/profile/password` | `GET`, `PUT` | Perfil y contraseña |
-| `api/settings/branding` | `GET`, `PUT` | Configuración y sincronización del encabezado |
+| `api/settings/branding` | `GET`, `PUT` | Lectura del logo corporativo en Configuración y el encabezado. `PUT` legado |
+| `api/organizations/me/logo` | `PUT` | Guarda el logo corporativo desde Configuración |
 | `api/subscription/overview` | `GET` | `SubscriptionPlanSection` |
 | `api/wallet/cards/lookup` | `POST` | Búsqueda/escaneo de tarjeta |
 | `api/wallet/cards/{earn,stamps,cashback-sale,redeem,redeem-cashback}` | `POST` | Acumulación y canjes Wallet |

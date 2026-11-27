@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { type OrganizationBranding, resolveLogoUrl } from "@/lib/branding";
 
 type SessionData = {
   userName: string;
@@ -40,32 +41,8 @@ type AppHeaderProps = {
 
 type BrandingResponse = {
   success?: boolean;
-  data?: {
-    organizationLogoUrl?: string | null;
-    programs?: Array<{
-      logoUrl?: string | null;
-      isActive?: boolean;
-    }>;
-  };
+  data?: OrganizationBranding;
 };
-
-const apiUrl = (
-  process.env.NEXT_PUBLIC_FIDARA_API_URL ??
-  "https://api.fidara.mx"
-).replace(/\/$/, "");
-
-function createAbsoluteLogoUrl(logoUrl?: string | null) {
-  if (!logoUrl) return null;
-
-  if (
-    logoUrl.startsWith("http://") ||
-    logoUrl.startsWith("https://")
-  ) {
-    return logoUrl;
-  }
-
-  return `${apiUrl}/${logoUrl.replace(/^\//, "")}`;
-}
 
 function getInitials(value: string) {
   return value
@@ -99,6 +76,8 @@ export function AppHeader({
     useState<SessionData | null>(null);
 
   useEffect(() => {
+    const brandingRequest = new AbortController();
+
     function synchronizeSession() {
       try {
         const storedSession = sessionStorage.getItem(
@@ -126,12 +105,19 @@ export function AppHeader({
       }
     }
 
+    function updateOrganizationLogo(logoUrl: string | null) {
+      setSession((current) =>
+        current ? { ...current, organizationLogoUrl: logoUrl } : current,
+      );
+    }
+
     async function synchronizeBranding() {
       try {
         const response = await fetch(
           "/api/settings/branding",
           {
             cache: "no-store",
+            signal: brandingRequest.signal,
           },
         );
 
@@ -140,32 +126,15 @@ export function AppHeader({
         const payload =
           (await response.json()) as BrandingResponse;
 
-        const activeProgram =
-          payload.data?.programs?.find(
-            (program) => program.isActive,
-          ) ?? payload.data?.programs?.[0];
+        if (brandingRequest.signal.aborted || payload.success === false || !payload.data) return;
 
-        const logoUrl =
-          payload.data?.organizationLogoUrl ??
-          activeProgram?.logoUrl ??
-          null;
-
-        if (!logoUrl) return;
-
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                organizationLogoUrl: logoUrl,
-              }
-            : current,
-        );
-
+        const logoUrl = resolveLogoUrl(payload.data.organizationLogoUrl);
         const rawSession = sessionStorage.getItem(
           "fidara_session",
         );
 
         if (rawSession) {
+          updateOrganizationLogo(logoUrl);
           const saved = JSON.parse(rawSession) as Record<
             string,
             unknown
@@ -184,9 +153,11 @@ export function AppHeader({
       }
     }
 
-    function handleBrandingUpdated() {
-      synchronizeSession();
-      void synchronizeBranding();
+    function handleBrandingUpdated(event: Event) {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== "string") return;
+
+      brandingRequest.abort();
+      updateOrganizationLogo(resolveLogoUrl(event.detail));
     }
 
     synchronizeSession();
@@ -204,6 +175,7 @@ export function AppHeader({
     );
 
     return () => {
+      brandingRequest.abort();
       window.removeEventListener(
         "fidara:branding-updated",
         handleBrandingUpdated,
@@ -255,7 +227,7 @@ export function AppHeader({
     );
   }
 
-  const organizationLogo = createAbsoluteLogoUrl(
+  const organizationLogo = resolveLogoUrl(
     session.organizationLogoUrl,
   );
 
