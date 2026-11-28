@@ -21,9 +21,11 @@ import {
   Gift,
   ImageIcon,
   LoaderCircle,
+  MapPin,
   Palette,
   Plus,
   Save,
+  Search,
   Stamp,
   Ticket,
   Trash2,
@@ -112,6 +114,20 @@ type ProgramInformation = {
   reward?: RewardInformation | null;
 };
 
+type ProgramLocationOption = {
+  id: string;
+  name: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+};
+
+type ProgramLocationsData = {
+  programId: string;
+  participatingLocationIds: string[];
+  availableLocations: ProgramLocationOption[];
+};
+
 type GiftCardPreset = {
   amount: number;
   isActive: boolean;
@@ -191,6 +207,12 @@ function absoluteUrl(value?: string | null) {
   }
 
   return `${apiUrl}${value}`;
+}
+
+function sameLocationIds(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const normalizedRight = new Set(right);
+  return left.every((id) => normalizedRight.has(id));
 }
 
 function normalizeNumericInput(value: string) {
@@ -328,6 +350,13 @@ export default function CardEditorPage() {
   const [program, setProgram] = useState<ProgramInformation | null>(null);
 
   const [form, setForm] = useState<ProgramForm>(initialForm);
+
+  const [availableLocations, setAvailableLocations] = useState<ProgramLocationOption[]>([]);
+  const [participatingLocationIds, setParticipatingLocationIds] = useState<string[]>([]);
+  const [savedParticipatingLocationIds, setSavedParticipatingLocationIds] = useState<string[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(!isNewProgram);
+  const [locationsError, setLocationsError] = useState("");
+  const [locationSearch, setLocationSearch] = useState("");
 
   const [files, setFiles] = useState<ImageFiles>({
     logo: null,
@@ -548,11 +577,123 @@ export default function CardEditorPage() {
     }
   }, [isNewProgram, programId, router]);
 
+  const loadProgramLocations = useCallback(async () => {
+    if (isNewProgram) return;
+
+    setLocationsLoading(true);
+    setLocationsError("");
+    try {
+      const response = await fetch(`/api/programs/${programId}/locations`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (!response.ok || !payload.data) {
+        throw new Error(
+          payload.message ?? "No fue posible cargar las sucursales participantes.",
+        );
+      }
+
+      const data = payload.data as ProgramLocationsData;
+      const available = Array.isArray(data.availableLocations)
+        ? data.availableLocations
+        : [];
+      const participating = Array.isArray(data.participatingLocationIds)
+        ? data.participatingLocationIds
+        : [];
+      setAvailableLocations(available);
+      setParticipatingLocationIds(participating);
+      setSavedParticipatingLocationIds(participating);
+    } catch (caught) {
+      setLocationsError(
+        caught instanceof Error
+          ? caught.message
+          : "No fue posible cargar las sucursales participantes.",
+      );
+    } finally {
+      setLocationsLoading(false);
+    }
+  }, [isNewProgram, programId, router]);
+
   useEffect(() => {
     // Carga inicial desde el BFF al montar/cambiar el programa.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadProgram();
   }, [loadProgram]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadProgramLocations);
+  }, [loadProgramLocations]);
+
+  const locationsDirty = !sameLocationIds(
+    participatingLocationIds,
+    savedParticipatingLocationIds,
+  );
+  const selectedActiveLocationCount = availableLocations.filter((location) =>
+    participatingLocationIds.includes(location.id),
+  ).length;
+  const normalizedLocationSearch = locationSearch.trim().toLocaleLowerCase("es-MX");
+  const filteredLocations = normalizedLocationSearch
+    ? availableLocations.filter((location) =>
+        [location.name, location.addressLine1, location.city, location.state]
+          .filter((value): value is string => Boolean(value))
+          .some((value) =>
+            value.toLocaleLowerCase("es-MX").includes(normalizedLocationSearch),
+          ),
+      )
+    : availableLocations;
+
+  function toggleParticipatingLocation(locationId: string) {
+    const availableIds = new Set(availableLocations.map((location) => location.id));
+    setParticipatingLocationIds((current) => {
+      const activeSelection = current.filter((id) => availableIds.has(id));
+      return activeSelection.includes(locationId)
+        ? activeSelection.filter((id) => id !== locationId)
+        : [...activeSelection, locationId];
+    });
+  }
+
+  function selectAllParticipatingLocations() {
+    setParticipatingLocationIds(availableLocations.map((location) => location.id));
+  }
+
+  function deselectAllParticipatingLocations() {
+    setParticipatingLocationIds([]);
+  }
+
+  async function saveProgramLocations() {
+    setLocationsError("");
+    const response = await fetch(`/api/programs/${programId}/locations`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationIds: participatingLocationIds }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      router.replace("/login");
+      throw new Error("Tu sesión ha expirado.");
+    }
+    if (!response.ok || !payload.data) {
+      throw new Error(
+        payload.message ?? "No fue posible guardar las sucursales participantes.",
+      );
+    }
+
+    const data = payload.data as ProgramLocationsData;
+    const participating = Array.isArray(data.participatingLocationIds)
+      ? data.participatingLocationIds
+      : participatingLocationIds;
+    setAvailableLocations(
+      Array.isArray(data.availableLocations)
+        ? data.availableLocations
+        : availableLocations,
+    );
+    setParticipatingLocationIds(participating);
+    setSavedParticipatingLocationIds(participating);
+  }
 
   function updateField<Key extends keyof ProgramForm>(
     field: Key,
@@ -1065,6 +1206,7 @@ export default function CardEditorPage() {
 
     setSaving(true);
     setError("");
+    let locationsSaveError: string | null = null;
 
     try {
       const formData = new FormData();
@@ -1314,6 +1456,18 @@ export default function CardEditorPage() {
         return;
       }
 
+      if (locationsDirty) {
+        try {
+          await saveProgramLocations();
+        } catch (caught) {
+          locationsSaveError =
+            caught instanceof Error
+              ? caught.message
+              : "No fue posible guardar las sucursales participantes.";
+          setLocationsError(locationsSaveError);
+        }
+      }
+
       const updated: ProgramInformation = payload.data;
 
       setProgram(updated);
@@ -1359,9 +1513,17 @@ export default function CardEditorPage() {
         stripImage: null,
       });
 
-      toast.success("Programa actualizado", {
-        description: payload.message ?? "La tarjeta se guardó correctamente.",
-      });
+      if (locationsSaveError) {
+        toast.error("Programa guardado parcialmente", {
+          description: `Los datos generales se actualizaron, pero las sucursales no: ${locationsSaveError}`,
+        });
+      } else {
+        toast.success("Programa actualizado", {
+          description: locationsDirty
+            ? "La tarjeta y sus sucursales participantes se guardaron correctamente."
+            : payload.message ?? "La tarjeta se guardó correctamente.",
+        });
+      }
     } catch (caught) {
       toast.error("No se pudo guardar el programa", {
         description:
@@ -1711,6 +1873,145 @@ export default function CardEditorPage() {
               </label>
             </div>
           </section>
+
+          {!isNewProgram && (
+            <section className="settings-card">
+              <div className="settings-card-heading">
+                <span>
+                  <MapPin size={19} />
+                </span>
+                <div>
+                  <h2>Sucursales participantes</h2>
+                  <p>
+                    Selecciona las sucursales donde tus clientes podrán acumular
+                    y utilizar sus beneficios con esta tarjeta.
+                  </p>
+                </div>
+              </div>
+
+              {locationsLoading ? (
+                <div className="grid gap-3" role="status" aria-label="Cargando sucursales">
+                  {[0, 1, 2].map((item) => (
+                    <div
+                      key={item}
+                      className="h-[74px] animate-pulse rounded-2xl border border-slate-200 bg-slate-50"
+                    />
+                  ))}
+                </div>
+              ) : locationsError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
+                  <strong className="block">No se pudieron cargar las sucursales</strong>
+                  <span className="mt-1 block">{locationsError}</span>
+                  <button
+                    type="button"
+                    className="mt-3 rounded-xl border border-rose-200 bg-white px-4 py-2 font-bold"
+                    onClick={() => void loadProgramLocations()}
+                  >
+                    Intentar nuevamente
+                  </button>
+                </div>
+              ) : availableLocations.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  No existen sucursales activas disponibles para este programa.
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-sm font-bold text-slate-600">
+                      {selectedActiveLocationCount} de {availableLocations.length} seleccionadas
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold text-slate-700 transition hover:border-rose-200 hover:text-[#E11D48] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={saving || selectedActiveLocationCount === availableLocations.length}
+                        onClick={selectAllParticipatingLocations}
+                      >
+                        Seleccionar todas
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold text-slate-700 transition hover:border-rose-200 hover:text-[#E11D48] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={saving || selectedActiveLocationCount === 0}
+                        onClick={deselectAllParticipatingLocations}
+                      >
+                        Deseleccionar todas
+                      </button>
+                    </div>
+                  </div>
+
+                  {availableLocations.length > 6 && (
+                    <label className="relative mb-4 block">
+                      <span className="sr-only">Buscar sucursal</span>
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="search"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-[#E11D48] focus:ring-2 focus:ring-rose-100"
+                        value={locationSearch}
+                        placeholder="Buscar por nombre, ciudad o dirección"
+                        onChange={(event) => setLocationSearch(event.target.value)}
+                      />
+                    </label>
+                  )}
+
+                  {filteredLocations.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-600">
+                      No hay sucursales que coincidan con la búsqueda.
+                    </div>
+                  ) : (
+                    <div className="grid max-h-[520px] gap-3 overflow-x-hidden overflow-y-auto pr-1 sm:grid-cols-2">
+                      {filteredLocations.map((location) => {
+                        const selected = participatingLocationIds.includes(location.id);
+                        const address = [location.addressLine1, location.city, location.state]
+                          .filter(Boolean)
+                          .join(", ");
+                        return (
+                          <label
+                            key={location.id}
+                            className={`flex min-w-0 cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
+                              selected
+                                ? "border-[#E11D48] bg-rose-50"
+                                : "border-slate-200 bg-white hover:border-rose-200"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 size-5 shrink-0 accent-[#E11D48]"
+                              checked={selected}
+                              disabled={saving}
+                              onChange={() => toggleParticipatingLocation(location.id)}
+                            />
+                            <span className="min-w-0">
+                              <strong className="block truncate text-sm text-slate-950">
+                                {location.name}
+                              </strong>
+                              <small className="mt-1 block break-words text-xs text-slate-500">
+                                {address || "Sin dirección registrada"}
+                              </small>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!locationsLoading && !locationsError && availableLocations.length > 1 && selectedActiveLocationCount === 0 && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900" role="alert">
+                  Sin sucursales seleccionadas, el programa dejará de estar disponible para operaciones presenciales.
+                </div>
+              )}
+
+              {!locationsLoading && !locationsError && availableLocations.length > 0 && (
+                <p className="mt-4 text-xs font-semibold text-slate-500">
+                  {locationsDirty
+                    ? "Hay cambios pendientes. Se guardarán al pulsar Guardar cambios."
+                    : "Las sucursales participantes están actualizadas."}
+                </p>
+              )}
+            </section>
+          )}
 
           {isGiftCardProgram && (
             <section className="settings-card">

@@ -838,6 +838,15 @@ input {
 .profile-copy {
   display: grid;
   gap: 2px;
+  min-width: 0;
+}
+
+.active-location-context {
+  display: block;
+  max-width: min(42vw, 280px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .organization-copy small,
@@ -1375,8 +1384,9 @@ input {
 }
 
 @media (max-width: 520px) {
-  .organization-copy small {
-    display: none;
+  .organization-copy .active-location-context {
+    display: block;
+    max-width: 120px;
   }
 
   .organization-copy strong {

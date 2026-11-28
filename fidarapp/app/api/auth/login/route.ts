@@ -73,9 +73,29 @@ export async function POST(
         ? locations[0]?.id
         : null);
 
+    const isOperationalRole =
+      data.roleId === 3 || data.roleId === 4;
+
+    const hasValidOperationalLocation =
+      typeof defaultLocationId === "string" &&
+      locations.length === 1 &&
+      locations[0]?.id === defaultLocationId;
+
+    if (isOperationalRole && !hasValidOperationalLocation) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Tu asignación de sucursal necesita corrección. Solicita a un administrador que te asigne exactamente una sucursal activa desde Equipo.",
+        },
+        { status: 409 },
+      );
+    }
+
     const requiresLocationSelection =
-      locations.length > 1 ||
-      data.requiresLocationSelection === true;
+      !isOperationalRole &&
+      (locations.length > 1 ||
+        data.requiresLocationSelection === true);
 
     let nextPath = "/dashboard";
 

@@ -5,6 +5,7 @@ import { Check, Crown, QrCode } from "lucide-react";
 import { toast } from "sonner";
 
 import { useActiveLocation } from "@/components/gift-cards/active-location";
+import { operationalErrorMessage } from "@/lib/active-location-client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
@@ -86,7 +87,9 @@ export function SubscriptionScanPanel({
       );
       const payload = (await response.json()) as ApiEnvelope<UsageResult>;
       if (!response.ok || !payload.data) {
-        throw new Error(payload.message ?? "No fue posible aplicar el beneficio.");
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible aplicar el beneficio."),
+        );
       }
       sessionStorage.removeItem(storageKey);
       setSnapshot((current) => ({
@@ -158,7 +161,7 @@ export function SubscriptionScanPanel({
         </div>
       </div>
 
-      <FidaraConfirmDialog open={dialogOpen} onOpenChange={(open) => { if (!submitting) setDialogOpen(open); }} title={isDiscount ? "Confirmar descuento de suscripción" : "Confirmar acceso de suscripción"} description="La operación quedará registrada en el historial de usos de la membresía." confirmLabel={isDiscount ? "Sí, aplicar descuento" : "Sí, validar acceso"} busy={submitting} busyLabel="Confirmando…" onConfirm={() => void consumeBenefit()}>
+      <FidaraConfirmDialog open={dialogOpen} onOpenChange={(open) => { if (!submitting) setDialogOpen(open); }} title={isDiscount ? "Confirmar descuento de suscripción" : "Confirmar acceso de suscripción"} description={`La operación quedará registrada en ${activeLocation.location?.name ?? "la sucursal activa"}.`} confirmLabel={isDiscount ? "Sí, aplicar descuento" : "Sí, validar acceso"} busy={submitting} busyLabel="Confirmando…" onConfirm={() => void consumeBenefit()}>
         {selectedBenefit && <div className="rounded-2xl bg-slate-50 p-4"><strong className="block">{selectedBenefit.name}</strong>{isDiscount && <p className="mt-1 text-sm text-slate-600">Compra bruta: {formatMoney(Number(grossAmount))}. El servidor calculará el descuento final.</p>}</div>}
       </FidaraConfirmDialog>
     </Card>

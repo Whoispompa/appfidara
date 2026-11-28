@@ -9,7 +9,6 @@ import {
   CircleDollarSign,
   CreditCard,
   Gift,
-  LoaderCircle,
   RefreshCw,
   Search,
   Sparkles,
@@ -37,8 +36,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 import { GiftCardStatistics } from "@/components/gift-cards/gift-card-statistics";
 import { SubscriptionStatistics } from "@/components/subscriptions/subscription-statistics";
+import { readLocationSession } from "@/lib/active-location-client";
 import { subscriptionsEnabled } from "@/lib/subscriptions";
 
 type PeriodMetrics = {
@@ -166,6 +167,21 @@ type ApiEnvelope<T> = {
   data?: T;
 };
 
+const HEATMAP_DAYS = [
+  [1, "Lun"],
+  [2, "Mar"],
+  [3, "Mié"],
+  [4, "Jue"],
+  [5, "Vie"],
+  [6, "Sáb"],
+  [7, "Dom"],
+] as const;
+
+function formatHeatmapHour(hour: number) {
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:00 ${hour < 12 ? "AM" : "PM"}`;
+}
+
 function toInputDate(date: Date) {
   const year = date.getFullYear();
   const month = String(
@@ -266,6 +282,44 @@ function ComparisonBadge({
   );
 }
 
+function StatisticsSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6" aria-label="Cargando estadísticas">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-44 rounded-[20px] border border-[#E5E7EB] bg-white p-5">
+            <div className="h-11 w-11 rounded-2xl bg-slate-100" />
+            <div className="mt-5 h-3 w-28 rounded bg-slate-100" />
+            <div className="mt-3 h-8 w-36 rounded bg-slate-200" />
+          </div>
+        ))}
+      </section>
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,.7fr)]">
+        <div className="h-[390px] rounded-[22px] border border-[#E5E7EB] bg-white p-6">
+          <div className="h-5 w-48 rounded bg-slate-200" />
+          <div className="mt-8 h-[290px] rounded-2xl bg-slate-100" />
+        </div>
+        <div className="h-[390px] rounded-[22px] bg-slate-200" />
+      </section>
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="h-80 rounded-[22px] bg-white" />
+        <div className="h-80 rounded-[22px] bg-white" />
+      </section>
+    </div>
+  );
+}
+
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="grid h-full place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
+      <div>
+        <Activity className="mx-auto text-slate-300" size={28} />
+        <p className="mt-3 text-sm font-bold text-slate-500">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function StatisticsPage() {
   const initialPeriod =
     useMemo(() => getInitialPeriod(), []);
@@ -275,6 +329,9 @@ export default function StatisticsPage() {
 
   const [to, setTo] =
     useState(initialPeriod.to);
+
+  const [appliedPeriod, setAppliedPeriod] =
+    useState(initialPeriod);
 
   const [programId, setProgramId] =
     useState("");
@@ -300,6 +357,9 @@ export default function StatisticsPage() {
   const [error, setError] =
     useState("");
 
+  const [operationalSession, setOperationalSession] =
+    useState<boolean | null>(null);
+
   const loadStatistics = useCallback(
     async (showLoader = false) => {
       if (showLoader) setLoading(true);
@@ -308,6 +368,23 @@ export default function StatisticsPage() {
       setError("");
 
       try {
+        if (!from || !to) {
+          throw new Error("Selecciona una fecha inicial y una fecha final.");
+        }
+
+        const startDate = new Date(`${from}T12:00:00`);
+        const endDate = new Date(`${to}T12:00:00`);
+        const periodDays =
+          Math.floor((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+
+        if (periodDays < 1) {
+          throw new Error("La fecha inicial no puede ser posterior a la fecha final.");
+        }
+
+        if (periodDays > 366) {
+          throw new Error("El periodo máximo permitido es de 366 días.");
+        }
+
         const search =
           new URLSearchParams();
 
@@ -318,14 +395,14 @@ export default function StatisticsPage() {
           search.set("programId", programId);
         }
 
-        if (locationId) {
+        if (operationalSession === false && locationId) {
           search.set(
             "locationId",
             locationId,
           );
         }
 
-        if (employeeId) {
+        if (operationalSession === false && employeeId) {
           search.set(
             "employeeId",
             employeeId,
@@ -369,12 +446,17 @@ export default function StatisticsPage() {
         }
 
         setData(payload.data);
+        setAppliedPeriod({ from, to });
       } catch (caught) {
-        setError(
+        const message =
           caught instanceof Error
             ? caught.message
-            : "No fue posible cargar las estadísticas.",
-        );
+            : "No fue posible cargar las estadísticas.";
+
+        setError(message);
+        toast.error("No se pudieron cargar las estadísticas", {
+          description: message,
+        });
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -384,11 +466,31 @@ export default function StatisticsPage() {
       employeeId,
       from,
       locationId,
+      operationalSession,
       programId,
       programType,
       to,
     ],
   );
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const session = readLocationSession();
+        const isAdministrator =
+          session.roleId === 1 ||
+          session.roleId === 2 ||
+          session.role === 1 ||
+          session.role === 2 ||
+          session.role === "Owner" ||
+          session.role === "Admin";
+
+        setOperationalSession(!isAdministrator);
+      } catch {
+        setOperationalSession(true);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     // Carga inicial de las métricas existentes.
@@ -439,6 +541,17 @@ export default function StatisticsPage() {
   const highlightedCustomer =
     data?.topCustomers[0];
 
+  const hasActivity = Boolean(
+    data &&
+      (data.current.operations > 0 ||
+        data.current.grossSales > 0 ||
+        data.current.rewardsRedeemed > 0),
+  );
+
+  const hasHeatmapActivity = Boolean(
+    data?.activityHeatmap.some((point) => point.operations > 0),
+  );
+
   const metricCards = data
     ? [
         {
@@ -482,18 +595,16 @@ export default function StatisticsPage() {
             "bg-violet-50 text-violet-700",
         },
         {
-          label: "Ticket promedio",
-          value: formatCurrency(
-            data.current.averageTicket,
-            currency,
+          label: "Recompensas canjeadas",
+          value: formatNumber(
+            data.current.rewardsRedeemed,
           ),
           note:
-            "En compras con importe registrado",
-          icon: TrendingUp,
-          comparison:
-            data.comparison.averageTicket,
+            "Canjes confirmados en el periodo",
+          icon: Gift,
+          comparison: undefined,
           tone:
-            "bg-emerald-50 text-emerald-700",
+            "bg-amber-50 text-amber-700",
         },
       ]
     : [];
@@ -570,7 +681,11 @@ export default function StatisticsPage() {
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div
+            className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+              operationalSession === false ? "xl:grid-cols-6" : "xl:grid-cols-4"
+            }`}
+          >
             <label>
               <span className="mb-2 block text-[11px] font-extrabold text-[#6B7280]">
                 Desde
@@ -670,67 +785,47 @@ export default function StatisticsPage() {
               </select>
             </label>
 
-            <label>
-              <span className="mb-2 block text-[11px] font-extrabold text-[#6B7280]">
-                Sucursal
-              </span>
+            {operationalSession === false && (
+              <>
+                <label>
+                  <span className="mb-2 block text-[11px] font-extrabold text-[#6B7280]">
+                    Sucursal
+                  </span>
 
-              <select
-                value={locationId}
-                onChange={(event) =>
-                  setLocationId(
-                    event.target.value,
-                  )
-                }
-                className="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-bold outline-none"
-              >
-                <option value="">
-                  Todas
-                </option>
+                  <select
+                    value={locationId}
+                    onChange={(event) => setLocationId(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-bold outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
+                  >
+                    <option value="">Todas</option>
+                    {data?.filters.locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                {data?.filters.locations.map(
-                  (location) => (
-                    <option
-                      key={location.id}
-                      value={location.id}
-                    >
-                      {location.name}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
+                <label>
+                  <span className="mb-2 block text-[11px] font-extrabold text-[#6B7280]">
+                    Empleado
+                  </span>
 
-            <label>
-              <span className="mb-2 block text-[11px] font-extrabold text-[#6B7280]">
-                Empleado
-              </span>
-
-              <select
-                value={employeeId}
-                onChange={(event) =>
-                  setEmployeeId(
-                    event.target.value,
-                  )
-                }
-                className="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-bold outline-none"
-              >
-                <option value="">
-                  Todos
-                </option>
-
-                {data?.filters.employees.map(
-                  (employee) => (
-                    <option
-                      key={employee.id}
-                      value={employee.id}
-                    >
-                      {employee.name}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
+                  <select
+                    value={employeeId}
+                    onChange={(event) => setEmployeeId(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-bold outline-none focus:border-[#E11D48] focus:ring-4 focus:ring-rose-100"
+                  >
+                    <option value="">Todos</option>
+                    {data?.filters.employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
           </div>
 
           <div className="mt-4 flex justify-end">
@@ -755,14 +850,18 @@ export default function StatisticsPage() {
         )}
 
         {loading ? (
-          <div className="grid min-h-[480px] place-items-center">
-            <LoaderCircle
-              size={32}
-              className="animate-spin text-[#E11D48]"
-            />
-          </div>
+          <StatisticsSkeleton />
         ) : data ? (
           <>
+            {!hasActivity && (
+              <section className="mb-6 rounded-[22px] border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+                <Activity className="mx-auto text-slate-300" size={32} />
+                <h2 className="mt-3 text-lg font-black">Sin actividad en este periodo</h2>
+                <p className="mx-auto mt-1 max-w-lg text-sm text-slate-500">
+                  Ajusta las fechas o los filtros para consultar otro intervalo. No se muestran estimaciones ni valores ficticios.
+                </p>
+              </section>
+            )}
             <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {metricCards.map((metric) => {
                 const Icon = metric.icon;
@@ -822,20 +921,23 @@ export default function StatisticsPage() {
                     "bg-emerald-50 text-emerald-700",
                 },
                 {
-                  label: "Recompensas",
+                  label: "Compras con importe",
                   value:
                     data.current
-                      .rewardsRedeemed,
-                  icon: Gift,
+                      .purchaseOperations,
+                  icon: CreditCard,
                   color:
                     "bg-violet-50 text-violet-700",
                 },
                 {
-                  label: "Wallet instaladas",
-                  value: data.wallet.total,
-                  icon: WalletCards,
+                  label: "Ticket promedio",
+                  value: formatCurrency(
+                    data.current.averageTicket,
+                    currency,
+                  ),
+                  icon: TrendingUp,
                   color:
-                    "bg-blue-50 text-blue-700",
+                    "bg-rose-50 text-[#E11D48]",
                 },
               ].map((item) => {
                 const Icon = item.icon;
@@ -857,9 +959,9 @@ export default function StatisticsPage() {
                       </small>
 
                       <strong className="block text-xl font-black">
-                        {formatNumber(
-                          item.value,
-                        )}
+                        {typeof item.value === "number"
+                          ? formatNumber(item.value)
+                          : item.value}
                       </strong>
                     </div>
                   </article>
@@ -867,8 +969,12 @@ export default function StatisticsPage() {
               })}
             </section>
 
-            <GiftCardStatistics from={from} to={to} />
-            {subscriptionsEnabled && <SubscriptionStatistics from={from} to={to} />}
+            {operationalSession === false && (
+              <GiftCardStatistics from={appliedPeriod.from} to={appliedPeriod.to} />
+            )}
+            {operationalSession === false && subscriptionsEnabled && (
+              <SubscriptionStatistics from={appliedPeriod.from} to={appliedPeriod.to} />
+            )}
 
             <section className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(340px,.7fr)]">
               <article className="rounded-[22px] border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_45px_rgba(0,0,0,0.05)] sm:p-6">
@@ -883,10 +989,8 @@ export default function StatisticsPage() {
                 </div>
 
                 <div className="mt-6 h-[330px]">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
+                  {hasActivity ? (
+                    <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                       data={data.trend}
                     >
@@ -981,7 +1085,10 @@ export default function StatisticsPage() {
                         dot={false}
                       />
                     </ComposedChart>
-                  </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="No hay ventas u operaciones para graficar." />
+                  )}
                 </div>
               </article>
 
@@ -1056,10 +1163,8 @@ export default function StatisticsPage() {
                 </p>
 
                 <div className="mt-6 h-[300px]">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
+                  {hasActivity ? (
+                    <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={
                         data.weekdayPerformance
@@ -1099,7 +1204,10 @@ export default function StatisticsPage() {
                         radius={[8, 8, 0, 0]}
                       />
                     </BarChart>
-                  </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="Aún no hay rendimiento diario en este periodo." />
+                  )}
                 </div>
               </article>
 
@@ -1114,10 +1222,8 @@ export default function StatisticsPage() {
                 </p>
 
                 <div className="mt-6 h-[300px]">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
+                  {hasActivity ? (
+                    <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={
                         data.hourlyPerformance
@@ -1158,7 +1264,10 @@ export default function StatisticsPage() {
                         radius={[7, 7, 0, 0]}
                       />
                     </BarChart>
-                  </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="Aún no hay actividad por horario." />
+                  )}
                 </div>
               </article>
             </section>
@@ -1181,83 +1290,80 @@ export default function StatisticsPage() {
                 </div>
               </div>
 
-              <div className="mt-6 overflow-x-auto">
-                <div className="min-w-[900px]">
-                  <div
-                    className="grid gap-1"
-                    style={{
-                      gridTemplateColumns:
-                        "90px repeat(24, minmax(28px, 1fr))",
-                    }}
-                  >
-                    <span />
-
-                    {Array.from({
-                      length: 24,
-                    }).map((_, hour) => (
-                      <span
-                        key={hour}
-                        className="text-center text-[9px] font-bold text-[#9CA3AF]"
-                      >
-                        {hour}
+              {hasHeatmapActivity ? (
+                <div className="mt-6">
+                  <div className="max-w-full overflow-x-auto overscroll-x-contain pb-2 md:overflow-x-visible">
+                    <div className="grid min-w-[920px] grid-cols-[48px_repeat(24,minmax(0,1fr))] gap-1.5 md:min-w-0 md:gap-1 lg:gap-1.5">
+                      <span aria-hidden="true" />
+                      <span className="col-span-12 border-b border-slate-200 pb-1 text-center text-[10px] font-black tracking-[0.16em] text-slate-400">
+                        AM
                       </span>
-                    ))}
+                      <span className="col-span-12 border-b border-slate-200 pb-1 text-center text-[10px] font-black tracking-[0.16em] text-slate-400">
+                        PM
+                      </span>
 
-                    {[
-                      [1, "Lun"],
-                      [2, "Mar"],
-                      [3, "Mié"],
-                      [4, "Jue"],
-                      [5, "Vie"],
-                      [6, "Sáb"],
-                      [7, "Dom"],
-                    ].flatMap(
-                      ([dayNumber, label]) => [
+                      <span aria-hidden="true" />
+                      {Array.from({ length: 24 }).map((_, hour) => (
+                        <span
+                          key={hour}
+                          className="py-1 text-center text-[10px] font-extrabold tabular-nums text-slate-500"
+                        >
+                          {hour % 12 || 12}
+                        </span>
+                      ))}
+
+                      {HEATMAP_DAYS.flatMap(([dayNumber, label]) => [
                         <span
                           key={`${dayNumber}-label`}
-                          className="flex items-center text-xs font-extrabold"
+                          className="flex items-center text-[10px] font-extrabold text-slate-600"
                         >
                           {label}
                         </span>,
-
-                        ...Array.from({
-                          length: 24,
-                        }).map((_, hour) => {
-                          const value =
-                            getHeatValue(
-                              Number(
-                                dayNumber,
-                              ),
-                              hour,
-                            );
-
-                          const intensity =
-                            value /
-                            maximumHeat;
+                        ...Array.from({ length: 24 }).map((_, hour) => {
+                          const value = getHeatValue(dayNumber, hour);
+                          const intensity = value / maximumHeat;
+                          const description = `${label}, ${formatHeatmapHour(hour)}: ${value} ${value === 1 ? "operación" : "operaciones"}`;
 
                           return (
-                            <div
+                            <span
                               key={`${dayNumber}-${hour}`}
-                              title={`${label} ${hour}:00 · ${value} operaciones`}
-                              className="aspect-square rounded-md"
+                              role="img"
+                              tabIndex={0}
+                              aria-label={description}
+                              title={description}
+                              className="aspect-square min-h-7 rounded-md outline-none transition hover:scale-[1.04] focus-visible:ring-2 focus-visible:ring-[#E11D48] focus-visible:ring-offset-2"
                               style={{
                                 backgroundColor:
                                   value === 0
-                                    ? "#F3F4F6"
-                                    : `rgba(225, 29, 72, ${
-                                        0.18 +
-                                        intensity *
-                                          0.82
-                                      })`,
+                                    ? "#E5E7EB"
+                                    : `rgba(225, 29, 72, ${0.18 + intensity * 0.82})`,
                               }}
                             />
                           );
                         }),
-                      ],
-                    )}
+                      ])}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-[10px] font-bold text-slate-500">
+                    <span>Menor actividad</span>
+                    {["#E5E7EB", "rgba(225, 29, 72, .28)", "rgba(225, 29, 72, .5)", "rgba(225, 29, 72, .72)", "#E11D48"].map((color) => (
+                      <span
+                        key={color}
+                        aria-hidden="true"
+                        className="h-3 w-3 rounded-[3px]"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                    <span aria-hidden="true">→</span>
+                    <span>Mayor actividad</span>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mt-6 h-48">
+                  <EmptyChart message="No hay operaciones para construir el mapa de actividad." />
+                </div>
+              )}
             </section>
 
             <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1339,11 +1445,30 @@ export default function StatisticsPage() {
                   en este periodo.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px]">
+                <>
+                  <div className="grid gap-3 p-4 md:hidden">
+                    {data.topCustomers.map((customer, index) => (
+                      <article key={customer.customerId} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-black text-xs font-black text-white">
+                            {index + 1}
+                          </span>
+                          <strong className="min-w-0 truncate text-sm">{customer.customerName}</strong>
+                        </div>
+                        <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                          <div><dt className="text-slate-500">Operaciones</dt><dd className="mt-1 font-black">{formatNumber(customer.operations)}</dd></div>
+                          <div><dt className="text-slate-500">Registrado</dt><dd className="mt-1 font-black">{formatCurrency(customer.grossSales, currency)}</dd></div>
+                          <div><dt className="text-slate-500">Recompensas</dt><dd className="mt-1 font-black">{formatNumber(customer.rewardsRedeemed)}</dd></div>
+                          <div><dt className="text-slate-500">Última actividad</dt><dd className="mt-1 font-semibold">{formatDateTime(customer.lastActivityAt)}</dd></div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="hidden md:block">
+                  <table className="w-full table-fixed">
                     <thead className="bg-[#F8FAFC] text-left text-[10px] font-black tracking-[0.1em] text-[#6B7280]">
                       <tr>
-                        <th className="px-6 py-3">
+                        <th className="w-[28%] px-6 py-3">
                           Cliente
                         </th>
                         <th className="px-4 py-3">
@@ -1355,7 +1480,7 @@ export default function StatisticsPage() {
                         <th className="px-4 py-3">
                           Recompensas
                         </th>
-                        <th className="px-6 py-3">
+                        <th className="w-[24%] px-6 py-3">
                           Última actividad
                         </th>
                       </tr>
@@ -1413,7 +1538,8 @@ export default function StatisticsPage() {
                       )}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
             </section>
           </>

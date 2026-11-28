@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { toast } from "sonner";
 
-type Location = { id: string; name: string };
-type StoredSession = {
-  activeLocationId?: string;
-  activeLocationName?: string;
-  defaultLocationId?: string;
-  locations?: Location[];
-};
+import {
+  readLocationSession,
+  resolveCachedActiveLocation,
+  SESSION_UPDATED_EVENT,
+  storeValidatedLocation,
+  type SessionLocation,
+} from "@/lib/active-location-client";
+
+type Location = SessionLocation;
 
 export function useActiveLocation() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -19,24 +21,30 @@ export function useActiveLocation() {
   const [changing, setChanging] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("fidara_session");
-      const session = raw ? (JSON.parse(raw) as StoredSession) : {};
-      const allowed = Array.isArray(session.locations) ? session.locations : [];
-      const candidate =
-        session.activeLocationId ??
-        session.defaultLocationId ??
-        (allowed.length === 1 ? allowed[0].id : "");
-      // La sesión del navegador es la fuente externa de estas ubicaciones.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocations(allowed);
-      setLocationId(allowed.some((item) => item.id === candidate) ? candidate : "");
-    } catch {
-      setLocations([]);
-      setLocationId("");
-    } finally {
-      setReady(true);
+    function synchronizeLocation() {
+      try {
+        const session = readLocationSession();
+        const allowed = Array.isArray(session.locations)
+          ? session.locations.filter((location) => location.isActive !== false)
+          : [];
+        const active = resolveCachedActiveLocation({ ...session, locations: allowed });
+        setLocations(allowed);
+        setLocationId(active?.id ?? "");
+      } catch {
+        setLocations([]);
+        setLocationId("");
+      } finally {
+        setReady(true);
+      }
     }
+
+    synchronizeLocation();
+    window.addEventListener(SESSION_UPDATED_EVENT, synchronizeLocation);
+    window.addEventListener("storage", synchronizeLocation);
+    return () => {
+      window.removeEventListener(SESSION_UPDATED_EVENT, synchronizeLocation);
+      window.removeEventListener("storage", synchronizeLocation);
+    };
   }, []);
 
   const selectLocation = useCallback(async (nextId: string) => {
@@ -52,16 +60,21 @@ export function useActiveLocation() {
         body: JSON.stringify({ locationId: nextId }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message ?? "No fue posible activar la sucursal.");
-      setLocationId(nextId);
-      const raw = sessionStorage.getItem("fidara_session");
-      const session = raw ? (JSON.parse(raw) as StoredSession) : {};
-      const selected = locations.find((item) => item.id === nextId);
-      sessionStorage.setItem("fidara_session", JSON.stringify({
-        ...session,
-        activeLocationId: nextId,
-        activeLocationName: selected?.name,
-      }));
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible activar la sucursal.");
+      }
+
+      const confirmed = payload?.data as Partial<Location> | undefined;
+      const selected = locations.find((item) => item.id === confirmed?.id);
+      if (!confirmed?.id || !selected) {
+        throw new Error("La API no confirmó una sucursal autorizada.");
+      }
+
+      setLocationId(confirmed.id);
+      storeValidatedLocation(readLocationSession(), {
+        id: confirmed.id,
+        name: confirmed.name?.trim() || selected.name,
+      });
     } catch (caught) {
       toast.error("No se pudo cambiar la sucursal", {
         description: caught instanceof Error ? caught.message : undefined,
@@ -115,4 +128,3 @@ export function ActiveLocationSelector({ compact = false }: { compact?: boolean 
     </label>
   );
 }
-

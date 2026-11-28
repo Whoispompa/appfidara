@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
 import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
+import { operationalErrorMessage } from "@/lib/active-location-client";
 import { useActiveLocation } from "./active-location";
 import styles from "@/app/dashboard/gift-cards/gift-cards.module.css";
 
@@ -72,7 +73,7 @@ const EMPTY_SALE = (programId: string): SaleForm => ({
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 const dataOf = <T,>(payload: unknown) => (((payload as { data?: T })?.data ?? payload) as T);
 const messageOf = (payload: unknown, fallback: string) =>
-  (payload as { message?: string })?.message ?? fallback;
+  operationalErrorMessage(payload as { code?: unknown; message?: unknown }, fallback);
 
 function attemptStorageKey(programId: string) {
   return `fidara_gift_sale_attempt_${programId}`;
@@ -352,7 +353,7 @@ export function GiftCardSalePanel({ programId }: { programId: string }) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title="Confirmar venta de Gift Card"
-        description={<>Confirma que recibiste {money.format(Number(sale.amount) || 0)} antes de registrar la venta y activar saldo real. El sistema ejecutará la venta pendiente y la confirmación de pago por separado.</>}
+        description={<>Confirma que recibiste {money.format(Number(sale.amount) || 0)} en {location.location?.name ?? "la sucursal activa"} antes de registrar la venta y activar saldo real. El sistema ejecutará la venta pendiente y la confirmación de pago por separado.</>}
         confirmLabel="Sí, confirmar venta"
         busyLabel="Confirmando venta…"
         busy={busy}

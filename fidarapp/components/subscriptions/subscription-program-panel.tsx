@@ -6,6 +6,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { toast } from "sonner";
 
 import { useActiveLocation } from "@/components/gift-cards/active-location";
+import { operationalErrorMessage } from "@/lib/active-location-client";
 import { Button } from "@/components/ui/button";
 import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -435,7 +436,11 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
         }),
       });
       const payload = (await response.json()) as ApiEnvelope<MembershipPaymentOperation>;
-      if (!response.ok || !payload.data) throw new Error(payload.message ?? "No fue posible registrar la membresía.");
+      if (!response.ok || !payload.data) {
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible registrar la membresía."),
+        );
+      }
       setPendingCustomerId(customerId);
       setPendingPayment(payload.data);
     } catch (error) {
@@ -481,7 +486,11 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
         },
       );
       const payload = (await response.json()) as ApiEnvelope<unknown>;
-      if (!response.ok) throw new Error(payload.message ?? "No fue posible confirmar el pago.");
+      if (!response.ok) {
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible confirmar el pago."),
+        );
+      }
       sessionStorage.removeItem(storageKey);
       sessionStorage.removeItem(`fidara_membership_enrollment_${programId}_${pendingCustomerId}`);
       toast.success("Membresía activada y pago confirmado");
@@ -865,7 +874,7 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <FidaraConfirmDialog open={Boolean(pendingPayment)} onOpenChange={(open) => { if (!open && !confirmingPayment) setPendingPayment(null); }} title="Confirmar pago de membresía" description="Confirma únicamente después de recibir el pago. El precio y la vigencia fueron calculados por el servidor." confirmLabel="Confirmar pago y activar" busy={confirmingPayment} busyLabel="Confirmando…" confirmDisabled={paymentMethod !== 1 && !paymentReference.trim()} onConfirm={() => void confirmPayment()}>
+      <FidaraConfirmDialog open={Boolean(pendingPayment)} onOpenChange={(open) => { if (!open && !confirmingPayment) setPendingPayment(null); }} title="Confirmar pago de membresía" description={`Confirma únicamente después de recibir el pago en ${activeLocation.location?.name ?? "la sucursal activa"}. El precio y la vigencia fueron calculados por el servidor.`} confirmLabel="Confirmar pago y activar" busy={confirmingPayment} busyLabel="Confirmando…" confirmDisabled={paymentMethod !== 1 && !paymentReference.trim()} onConfirm={() => void confirmPayment()}>
         {pendingPayment && <div className="grid gap-4"><div className="rounded-2xl bg-slate-50 p-4"><small className="font-bold text-slate-500">Importe confirmado por servidor</small><strong className="block text-2xl">{pendingPayment.amount.toLocaleString("es-MX", { style: "currency", currency: pendingPayment.currency })}</strong></div><label className="grid gap-2 text-sm font-bold">Método<select className="h-12 rounded-xl border border-slate-300 bg-white px-3" value={paymentMethod} disabled={confirmingPayment} onChange={(event) => setPaymentMethod(Number(event.target.value) as 1 | 2 | 3)}><option value={1}>Efectivo</option><option value={2}>Tarjeta</option><option value={3}>Transferencia</option></select></label>{paymentMethod !== 1 && <label className="grid gap-2 text-sm font-bold">Referencia<Input value={paymentReference} disabled={confirmingPayment} onChange={(event) => setPaymentReference(event.target.value)} /></label>}<label className="grid gap-2 text-sm font-bold">Nota de evidencia (opcional)<Input value={evidenceNote} disabled={confirmingPayment} onChange={(event) => setEvidenceNote(event.target.value)} /></label><p className="flex items-center gap-2 text-sm font-semibold text-slate-600"><Check className="size-4 text-[#E11D48]" />La membresía conserva la misma tarjeta y QR al renovarse.</p></div>}
       </FidaraConfirmDialog>
     </section>

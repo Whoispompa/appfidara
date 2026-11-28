@@ -5,8 +5,10 @@ import { Crown, ExternalLink, LoaderCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useActiveLocation } from "@/components/gift-cards/active-location";
 import { FidaraConfirmDialog } from "@/components/ui/fidara-confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { operationalErrorMessage } from "@/lib/active-location-client";
 import {
   type ApiEnvelope,
   type MembershipDetail,
@@ -33,6 +35,7 @@ export function CustomerMemberships({
   customerName: string;
   cards: CustomerCard[];
 }) {
+  const activeLocation = useActiveLocation();
   const [memberships, setMemberships] = useState<MembershipDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [renewingId, setRenewingId] = useState("");
@@ -110,7 +113,11 @@ export function CustomerMemberships({
         },
       );
       const payload = (await response.json()) as ApiEnvelope<MembershipPaymentOperation>;
-      if (!response.ok || !payload.data) throw new Error(payload.message ?? "No fue posible preparar la renovación.");
+      if (!response.ok || !payload.data) {
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible preparar la renovación."),
+        );
+      }
       setPending(payload.data);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No fue posible preparar la renovación.");
@@ -141,7 +148,11 @@ export function CustomerMemberships({
         },
       );
       const payload = (await response.json()) as ApiEnvelope<unknown>;
-      if (!response.ok) throw new Error(payload.message ?? "No fue posible confirmar la renovación.");
+      if (!response.ok) {
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible confirmar la renovación."),
+        );
+      }
       sessionStorage.removeItem(storageKey);
       sessionStorage.removeItem(`fidara_membership_renewal_${pending.membershipId}`);
       toast.success("Renovación y pago confirmados");
@@ -187,7 +198,7 @@ export function CustomerMemberships({
         return <article key={membership.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold">{membership.programName}</h3><p className="text-sm text-slate-500">{membership.currentPlanName ?? "Plan pendiente"}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-extrabold">{membershipStatusLabel(membership.status)}</span></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-slate-500">Inicio</dt><dd className="font-bold">{formatDate(membership.currentTermStartsAtUtc)}</dd></div><div><dt className="text-slate-500">Vigencia</dt><dd className="font-bold">{formatDate(membership.currentTermEndsAtUtc)}</dd></div></dl><div className="mt-4 flex flex-wrap gap-2"><Button type="button" className="bg-[#E11D48] font-bold hover:bg-[#BE123C]" disabled={renewingId === membership.id || membership.status === 4} onClick={() => void createRenewal(membership)}>{renewingId === membership.id ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}Renovar</Button><a className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold" href={`/api/wallet/apple/${encodeURIComponent(membership.loyaltyCardId)}`}><ExternalLink className="mr-2 size-4" />Apple Wallet</a><Button type="button" variant="outline" disabled={openingGoogleWallet === membership.loyaltyCardId} onClick={() => void openGoogleWallet(membership.loyaltyCardId)}>{openingGoogleWallet === membership.loyaltyCardId ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <ExternalLink className="mr-2 size-4" />}Google Wallet</Button>{card && <a className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold" href={`${process.env.NEXT_PUBLIC_GET_APP_URL ?? "https://get.fidara.mx"}/card/${encodeURIComponent(card.qrToken)}`} target="_blank" rel="noreferrer">QR</a>}</div></article>;
       })}</div>}
 
-      <FidaraConfirmDialog open={Boolean(pending)} onOpenChange={(open) => { if (!open && !confirming) setPending(null); }} title="Confirmar renovación de membresía" description="Confirma únicamente después de recibir el pago. El servidor conservará la misma membresía, tarjeta y QR." confirmLabel="Confirmar pago y renovar" busy={confirming} busyLabel="Confirmando…" confirmDisabled={paymentMethod !== 1 && !paymentReference.trim()} onConfirm={() => void confirmRenewal()}>
+      <FidaraConfirmDialog open={Boolean(pending)} onOpenChange={(open) => { if (!open && !confirming) setPending(null); }} title="Confirmar renovación de membresía" description={`Confirma únicamente después de recibir el pago en ${activeLocation.location?.name ?? "la sucursal activa"}. El servidor conservará la misma membresía, tarjeta y QR.`} confirmLabel="Confirmar pago y renovar" busy={confirming} busyLabel="Confirmando…" confirmDisabled={paymentMethod !== 1 && !paymentReference.trim()} onConfirm={() => void confirmRenewal()}>
         {pending && <div className="grid gap-4"><div className="rounded-2xl bg-slate-50 p-4"><small className="font-bold text-slate-500">Importe calculado por servidor</small><strong className="block text-2xl">{pending.amount.toLocaleString("es-MX", { style: "currency", currency: pending.currency })}</strong><p className="text-sm text-slate-500">{formatDate(pending.proposedStartsAtUtc)} – {formatDate(pending.proposedEndsAtUtc)}</p></div><label className="grid gap-2 text-sm font-bold">Método<select className="h-12 rounded-xl border border-slate-300 bg-white px-3" value={paymentMethod} onChange={(event) => setPaymentMethod(Number(event.target.value) as 1 | 2 | 3)}><option value={1}>Efectivo</option><option value={2}>Tarjeta</option><option value={3}>Transferencia</option></select></label>{paymentMethod !== 1 && <label className="grid gap-2 text-sm font-bold">Referencia<Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} /></label>}<label className="grid gap-2 text-sm font-bold">Nota de evidencia (opcional)<Input value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} /></label></div>}
       </FidaraConfirmDialog>
     </section>

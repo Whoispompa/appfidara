@@ -1,0 +1,164 @@
+.page {
+  --red: #e11d48;
+  --red-dark: #be123c;
+  --dark: #111827;
+  --gray: #6b7280;
+  --border: #e5e7eb;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 22px;
+  color: var(--dark);
+}
+
+.heading h1 {
+  margin: 12px 0 8px;
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.heading p,
+.cardHeader p,
+.logoCopy p,
+.walletPreview p,
+.emptyState p,
+.inlineError p { margin: 0; }
+
+.heading > p { color: var(--gray); font-size: 14px; line-height: 1.55; }
+.eyebrow { display: block; color: var(--red); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; }
+
+.sections {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(17, 24, 39, 0.06);
+}
+
+.cardHeader { display: flex; align-items: flex-start; gap: 13px; padding: 20px 22px; border-bottom: 1px solid var(--border); }
+.cardHeader > div { min-width: 0; }
+.cardHeader h2 { margin: 1px 0 4px; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.cardHeader p { color: var(--gray); font-size: 12px; font-weight: 400; line-height: 1.55; }
+.iconBox, .emptyLogo, .walletEmpty, .emptyState > span { display: grid; flex: 0 0 auto; place-items: center; color: var(--red); background: #fff1f2; }
+.iconBox { width: 44px; height: 44px; border-radius: 14px; }
+.cardBody { display: grid; gap: 16px; padding: 22px; }
+.label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+.logoGuidance .label { margin-bottom: 4px; }
+.logoGuidance p { margin: 0; color: var(--gray); font-size: 12px; font-weight: 400; line-height: 1.45; }
+
+.dropzone { display: grid; min-width: 0; gap: 16px; padding: 18px; border: 1px dashed #d1d5db; border-radius: 17px; background: #fdfdfd; transition: border-color 160ms ease, background 160ms ease; }
+.dropzone:hover, .dragging { border-color: var(--red); background: #fffafb; }
+.logoPresentation { display: flex; width: 100%; min-width: 0; align-items: center; gap: 16px; }
+.businessLogo { width: 96px; height: 96px; flex: 0 0 96px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: #fff; padding: 10px; }
+.businessLogo img, .walletLogo img { border-radius: 0; object-fit: contain; }
+.emptyLogo { width: 96px; height: 96px; border-radius: 18px; }
+.logoCopy { min-width: 0; flex: 1 1 auto; }
+.logoCopy strong { display: block; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.logoCopy p { margin-top: 6px; color: var(--gray); font-size: 12px; line-height: 1.45; }
+.fileActions { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; }
+.fileActions button { flex: 0 0 auto; white-space: nowrap; }
+
+.secondaryButton, .cancelButton, .primaryButton, .alert button, .inlineError button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color 160ms ease, color 160ms ease, background 160ms ease; }
+.secondaryButton { padding: 0 15px; border: 1px solid var(--border); color: var(--dark); background: #fff; }
+.secondaryButton:hover:not(:disabled) { border-color: #d1d5db; background: #f9fafb; }
+.cancelButton { padding: 0 10px; border: 0; color: var(--gray); background: transparent; }
+.cancelButton:hover:not(:disabled) { color: var(--dark); background: #f3f4f6; }
+.cardActions { display: flex; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border); }
+.primaryButton { min-height: 44px; padding: 0 18px; border: 1px solid var(--red); color: #fff; background: var(--red); box-shadow: 0 10px 22px rgba(225, 29, 72, 0.18); }
+.primaryButton:hover:not(:disabled) { border-color: var(--red-dark); background: var(--red-dark); }
+.primaryButton:disabled, .secondaryButton:disabled, .cancelButton:disabled { border-color: #e5e7eb; color: #9ca3af; background: #f3f4f6; box-shadow: none; cursor: not-allowed; }
+.primaryButton:focus-visible, .secondaryButton:focus-visible, .cancelButton:focus-visible, .alert button:focus-visible, .inlineError button:focus-visible, .cardBody select:focus-visible { outline: 3px solid rgba(225, 29, 72, 0.18); outline-offset: 2px; }
+
+.cardBody select { width: 100%; min-width: 0; height: 46px; padding: 0 38px 0 13px; border: 1px solid var(--border); border-radius: 12px; color: var(--dark); background: #fff; font: inherit; font-size: 13px; font-weight: 600; text-overflow: ellipsis; }
+.cardBody select:hover { border-color: #d1d5db; }
+.walletPreview { display: flex; min-width: 0; align-items: center; gap: 15px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: #fdfdfd; }
+.walletLogo, .walletEmpty { width: 74px; height: 74px; flex: 0 0 74px; overflow: hidden; border: 1px solid var(--border); border-radius: 15px; background: #fff; padding: 8px; }
+.walletPreview > div { min-width: 0; }
+.walletPreview strong { display: block; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.walletPreview div > span { display: block; margin-top: 3px; color: var(--dark); font-size: 12px; }
+.walletPreview p { margin-top: 4px; color: var(--gray); font-size: 11px; }
+.readOnlyNote { margin: 0; padding: 12px 14px; border-radius: 12px; color: var(--gray); background: #f7f7f6; font-size: 12px; line-height: 1.5; }
+.emptyState { display: grid; justify-items: center; padding: 28px 16px; text-align: center; }
+.emptyState > span { width: 52px; height: 52px; margin-bottom: 13px; border-radius: 16px; }
+.emptyState strong { font-size: 14px; font-weight: 600; }
+.emptyState p { margin-top: 5px; color: var(--gray); font-size: 12px; }
+
+.alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; border: 1px solid #fecdd3; border-radius: 14px; color: #9f1239; background: #fff1f2; font-size: 13px; }
+.alert span { display: flex; min-width: 0; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.alert svg { flex: 0 0 auto; margin-top: 1px; }
+.alert button, .inlineError button { min-height: auto; padding: 4px 6px; border: 0; color: inherit; background: transparent; }
+.inlineError { color: #9f1239; font-size: 13px; }
+.inlineError button { margin-top: 7px; padding-left: 0; }
+.spinner { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.skeleton { animation: pulse 2.5s ease-in-out infinite; }
+.skeletonTitle, .skeletonDescription, .skeletonIcon, .skeletonHeading, .skeletonLine, .skeletonLabel, .skeletonHint, .skeletonSelect, .skeletonBusinessLogo, .skeletonChangeButton, .skeletonSaveButton, .skeletonWalletLogo, .skeletonNote, .skeletonFileCopy span, .skeletonProgramCopy span { display: block; max-width: 100%; border-radius: 7px; background: #e5e7eb; }
+.skeletonTitle { width: 240px; height: clamp(34px, 4vw, 48px); margin: 0 0 8px; border-radius: 10px; }
+.skeletonDescription { width: min(520px, 85%); height: 14px; }
+.skeletonIcon { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 14px; }
+.skeletonHeaderCopy { display: grid; flex: 1; gap: 9px; padding-top: 3px; }
+.skeletonHeading { width: 160px; height: 16px; }
+.skeletonLine { width: min(340px, 78%); height: 11px; }
+.skeletonBody { display: grid; gap: 16px; padding: 22px; }
+.skeletonLabel { width: 110px; height: 12px; }
+.skeletonGuidance { display: grid; gap: 7px; }
+.skeletonHint { width: min(310px, 72%); height: 11px; }
+.skeletonUpload { display: grid; gap: 16px; padding: 18px; border: 1px dashed #d1d5db; border-radius: 17px; background: #fdfdfd; }
+.skeletonLogoRow { display: flex; min-width: 0; align-items: center; gap: 16px; }
+.skeletonBusinessLogo { width: 96px; height: 96px; flex: 0 0 96px; border-radius: 18px; }
+.skeletonFileCopy, .skeletonProgramCopy { display: grid; width: min(260px, 55%); gap: 9px; }
+.skeletonFileCopy span:first-child { width: 100%; height: 14px; }
+.skeletonFileCopy span:last-child { width: 62%; height: 11px; }
+.skeletonChangeButton { width: 150px; height: 42px; border-radius: 12px; }
+.skeletonActions { display: flex; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border); }
+.skeletonSaveButton { width: 158px; height: 44px; border-radius: 12px; }
+.skeletonSelect { width: 100%; height: 46px; margin-top: 8px; border-radius: 12px; }
+.skeletonWalletPreview { display: flex; align-items: center; gap: 15px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: #fdfdfd; }
+.skeletonWalletLogo { width: 74px; height: 74px; flex: 0 0 74px; border-radius: 15px; }
+.skeletonProgramCopy span:nth-child(1) { width: 100%; height: 14px; }
+.skeletonProgramCopy span:nth-child(2) { width: 68%; height: 11px; }
+.skeletonProgramCopy span:nth-child(3) { width: 82%; height: 10px; }
+.skeletonNote { width: 100%; height: 42px; border-radius: 12px; }
+@keyframes pulse { 50% { opacity: 0.58; } }
+
+@media (max-width: 960px) {
+  .sections { grid-template-columns: 1fr; }
+  .dropzone { align-items: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .page { gap: 19px; }
+  .heading h1 { font-size: 36px; }
+  .cardHeader, .cardBody, .skeletonBody { padding: 16px; }
+  .dropzone { padding: 14px; }
+  .businessLogo, .emptyLogo { width: 80px; height: 80px; flex-basis: 80px; }
+  .cardActions .primaryButton { width: 100%; }
+  .skeletonBusinessLogo { width: 80px; height: 80px; flex-basis: 80px; }
+  .skeletonSaveButton { width: 100%; }
+  .alert { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 390px) {
+  .logoPresentation { align-items: stretch; flex-direction: column; }
+  .walletPreview { align-items: flex-start; }
+  .fileActions { display: grid; grid-template-columns: 1fr; }
+  .secondaryButton, .cancelButton { width: 100%; }
+  .skeletonLogoRow { align-items: stretch; flex-direction: column; }
+  .skeletonFileCopy { width: 70%; }
+  .skeletonChangeButton { width: 100%; }
+  .walletLogo, .walletEmpty { width: 62px; height: 62px; flex-basis: 62px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .skeleton, .spinner { animation: none; } }

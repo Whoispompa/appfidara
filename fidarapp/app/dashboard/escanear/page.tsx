@@ -13,6 +13,7 @@ import {
   Keyboard,
   LoaderCircle,
   Mail,
+  MapPin,
   Phone,
   QrCode,
   ShoppingBag,
@@ -48,6 +49,7 @@ import {
   type MembershipLookup,
   subscriptionsEnabled,
 } from "@/lib/subscriptions";
+import { operationalErrorMessage } from "@/lib/active-location-client";
 
 const Scanner = dynamic(
   () =>
@@ -784,6 +786,10 @@ export default function ScannerPage() {
       const cleanToken = rawValue.trim();
 
       if (!cleanToken || loading || card || giftCard || membership) return;
+      if (!activeLocation.locationId) {
+        toast.error("Selecciona una sucursal antes de escanear.");
+        return;
+      }
 
       setLoading(true);
       setQrToken(cleanToken);
@@ -808,8 +814,10 @@ export default function ScannerPage() {
           }
           if (membershipResponse.status !== 404) {
             throw new Error(
-              membershipPayload.message ??
-                "No fue posible consultar la suscripciÃ³n.",
+              operationalErrorMessage(
+                membershipPayload,
+                "No fue posible consultar la suscripción.",
+              ),
             );
           }
         }
@@ -850,7 +858,9 @@ export default function ScannerPage() {
         const payload = (await response.json()) as ApiPayload;
 
         if (!response.ok || !payload.data) {
-          throw new Error(payload.message ?? "No encontramos la tarjeta.");
+          throw new Error(
+            operationalErrorMessage(payload, "No encontramos la tarjeta."),
+          );
         }
 
         setCard(payload.data);
@@ -874,6 +884,7 @@ export default function ScannerPage() {
       loadGiftCardMovements,
       loadGiftCardShare,
       loading,
+      activeLocation.locationId,
     ],
   );
 
@@ -961,7 +972,7 @@ export default function ScannerPage() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible confirmar el canje.",
+          operationalErrorMessage(payload, "No fue posible confirmar el canje."),
         );
       }
 
@@ -1086,7 +1097,7 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible registrar la compra.",
+          operationalErrorMessage(payload, "No fue posible registrar la compra."),
         );
       }
 
@@ -1232,7 +1243,7 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible registrar el progreso.",
+          operationalErrorMessage(payload, "No fue posible registrar el progreso."),
         );
       }
 
@@ -1389,7 +1400,9 @@ export default function ScannerPage() {
       const payload = (await response.json()) as ApiPayload;
 
       if (!response.ok) {
-        throw new Error(payload.message ?? "No fue posible canjear el cupón.");
+        throw new Error(
+          operationalErrorMessage(payload, "No fue posible canjear el cupón."),
+        );
       }
 
       const discountAmount = Number(
@@ -1490,7 +1503,7 @@ export default function ScannerPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.message ?? "No fue posible canjear la recompensa.",
+          operationalErrorMessage(payload, "No fue posible canjear la recompensa."),
         );
       }
 
@@ -1570,6 +1583,21 @@ export default function ScannerPage() {
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
             Centra el QR en la cámara o ingresa el código manualmente.
           </p>
+          <div
+            className={`mx-auto mt-3 inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
+              activeLocation.location
+                ? "bg-rose-50 text-[#E11D48]"
+                : "bg-amber-50 text-amber-800"
+            }`}
+            role="status"
+          >
+            <MapPin className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {activeLocation.location
+                ? `Sucursal: ${activeLocation.location.name}`
+                : "Sin sucursal validada"}
+            </span>
+          </div>
         </section>
       )}
 
@@ -1582,7 +1610,7 @@ export default function ScannerPage() {
             <div className="flex flex-col items-center">
               <div className="relative aspect-square w-full max-w-[620px] overflow-hidden rounded-[24px] bg-black shadow-[0_18px_45px_rgba(17,24,39,0.14)] sm:aspect-[4/3] [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
                 <Scanner
-                  paused={loading}
+                  paused={loading || !activeLocation.locationId}
                   formats={["qr_code"]}
                   constraints={{ facingMode: "environment" }}
                   sound={false}

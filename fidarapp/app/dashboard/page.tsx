@@ -17,7 +17,11 @@ import { useRouter } from "next/navigation";
 
 import {
 
+  ArrowDownRight,
+
   ArrowRight,
+
+  ArrowUpRight,
 
   Banknote,
 
@@ -31,11 +35,7 @@ import {
 
   Gift,
 
-  LoaderCircle,
-
   QrCode,
-
-  RefreshCw,
 
   Stamp,
 
@@ -238,6 +238,128 @@ type Period = "today" | "month";
 
 
 type ChartMetric = "netSales" | "operations" | "customers";
+
+
+
+type GrowthResult = number | "new" | null;
+
+
+
+function calculateGrowth(current: number, previous?: number): GrowthResult {
+
+  if (!Number.isFinite(current) || previous === undefined || !Number.isFinite(previous)) {
+
+    return null;
+
+  }
+
+  if (previous === 0) {
+
+    return current > 0 ? "new" : 0;
+
+  }
+
+  const percentage = ((current - previous) / previous) * 100;
+
+  return Number.isFinite(percentage) ? percentage : null;
+
+}
+
+
+
+function GrowthBadge({
+
+  current,
+
+  previous,
+
+  comparisonLabel,
+
+}: {
+
+  current: number;
+
+  previous?: number;
+
+  comparisonLabel: string;
+
+}) {
+
+  const growth = calculateGrowth(current, previous);
+
+  const formatted =
+
+    typeof growth === "number"
+
+      ? `${new Intl.NumberFormat("es-MX", {
+
+          maximumFractionDigits: 1,
+
+        }).format(Math.abs(growth))}%`
+
+      : growth === "new"
+
+        ? "Nuevo"
+
+        : "Sin referencia";
+
+  const accessibleText = `${formatted} respecto a ${comparisonLabel}`;
+
+  if (growth === null || growth === 0) {
+
+    return (
+
+      <span
+
+        className="inline-flex min-h-7 items-center gap-1 rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[10px] font-extrabold text-[#6B7280]"
+
+        aria-label={accessibleText}
+
+        title={accessibleText}
+
+      >
+
+        {formatted}
+
+      </span>
+
+    );
+
+  }
+
+  const positive = growth === "new" || growth > 0;
+
+  const Icon = positive ? ArrowUpRight : ArrowDownRight;
+
+  return (
+
+    <span
+
+      className={`inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+
+        positive
+
+          ? "bg-emerald-50 text-emerald-700"
+
+          : "bg-rose-50 text-rose-700"
+
+      }`}
+
+      aria-label={accessibleText}
+
+      title={accessibleText}
+
+    >
+
+      <Icon size={13} aria-hidden="true" />
+
+      {formatted}
+
+    </span>
+
+  );
+
+}
 
 
 
@@ -649,6 +771,8 @@ export default function DashboardPage() {
 
       label: "Operaciones",
 
+      current: metrics.operations,
+
       value: formatNumber(metrics.operations),
 
       note: `Movimientos ${periodLabel}`,
@@ -662,6 +786,8 @@ export default function DashboardPage() {
     {
 
       label: "Clientes atendidos",
+
+      current: metrics.customers,
 
       value: formatNumber(metrics.customers),
 
@@ -677,6 +803,8 @@ export default function DashboardPage() {
 
       label: "Ventas registradas",
 
+      current: metrics.netSales ?? metrics.grossSales,
+
       value: formatCurrency(metrics.netSales ?? metrics.grossSales),
 
       note: "Importe después de descuentos",
@@ -690,6 +818,8 @@ export default function DashboardPage() {
     {
 
       label: "Recompensas canjeadas",
+
+      current: metrics.rewardsRedeemed,
 
       value: formatNumber(metrics.rewardsRedeemed),
 
@@ -708,6 +838,16 @@ export default function DashboardPage() {
     },
 
   ];
+
+
+
+  const comparisonLabel =
+
+    period === "today"
+
+      ? "ayer en el mismo intervalo horario"
+
+      : "el intervalo equivalente del mes anterior";
 
 
 
@@ -936,11 +1076,13 @@ export default function DashboardPage() {
 
 
 
-                  <span className="rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-[#6B7280]">
+                  <GrowthBadge
 
-                    {period === "today" ? "Hoy" : "Mes"}
+                    current={metric.current}
 
-                  </span>
+                    comparisonLabel={comparisonLabel}
+
+                  />
 
                 </div>
 

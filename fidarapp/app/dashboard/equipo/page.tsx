@@ -43,6 +43,7 @@ const columns = ["Integrante", "Rol", "Sucursales asignadas", "Estado", "Último
 type LocationOption = {
   id: string;
   name: string;
+  isActive?: boolean;
   addressLine1?: string | null;
   city?: string | null;
   state?: string | null;
@@ -99,9 +100,13 @@ const roleLabels: Record<number, string> = {
 
 const roleDescriptions: Record<number, string> = {
   2: "Administra el equipo, las sucursales y la operación.",
-  3: "Supervisa la operación en sus sucursales asignadas.",
-  4: "Escanea tarjetas y atiende clientes en sus sucursales.",
+  3: "Supervisa la operación en su sucursal asignada.",
+  4: "Escanea tarjetas y atiende clientes en su sucursal asignada.",
 };
+
+function isOperationalRole(role: number) {
+  return role === 3 || role === 4;
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "Sin actividad";
@@ -173,7 +178,11 @@ export default function TeamPage() {
       }
 
       setMembers(teamPayload.data ?? []);
-      setLocations(locationsPayload.data ?? []);
+      setLocations(
+        (locationsPayload.data ?? []).filter(
+          (location: LocationOption) => location.isActive !== false,
+        ),
+      );
       setHasLoaded(true);
     } catch (caught) {
       setError(
@@ -187,7 +196,8 @@ export default function TeamPage() {
   }, []);
 
   useEffect(() => {
-    void loadData();
+    const timeout = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timeout);
   }, [loadData]);
 
   useEffect(() => {
@@ -236,6 +246,10 @@ export default function TeamPage() {
   }
 
   function openEditForm(member: TeamMember) {
+    const activeAssignments = member.locations
+      .map((location) => location.id)
+      .filter((locationId) => locations.some((location) => location.id === locationId));
+
     setEditing(member);
     setForm({
       firstName: member.firstName,
@@ -244,7 +258,10 @@ export default function TeamPage() {
       phone: member.phone ?? "",
       password: "",
       role: member.role,
-      locationIds: member.locations.map((location) => location.id),
+      locationIds:
+        isOperationalRole(member.role) && activeAssignments.length !== 1
+          ? []
+          : activeAssignments,
     });
     setError("");
     setFormOpen(true);
@@ -266,10 +283,24 @@ export default function TeamPage() {
   function toggleLocation(locationId: string) {
     setForm((current) => ({
       ...current,
-      locationIds: current.locationIds.includes(locationId)
-        ? current.locationIds.filter((id) => id !== locationId)
-        : [...current.locationIds, locationId],
+      locationIds: isOperationalRole(current.role)
+        ? [locationId]
+        : current.locationIds.includes(locationId)
+          ? current.locationIds.filter((id) => id !== locationId)
+          : [...current.locationIds, locationId],
     }));
+  }
+
+  function changeRole(role: number) {
+    setForm((current) => ({
+      ...current,
+      role,
+      locationIds:
+        isOperationalRole(role) && current.locationIds.length !== 1
+          ? []
+          : current.locationIds,
+    }));
+    setRoleMenuOpen(false);
   }
 
   async function saveMember(event: FormEvent<HTMLFormElement>) {
@@ -285,8 +316,21 @@ export default function TeamPage() {
       return;
     }
 
-    if (form.locationIds.length === 0) {
-      setError("Selecciona al menos una sucursal.");
+    if (
+      (isOperationalRole(form.role) && form.locationIds.length !== 1) ||
+      (!isOperationalRole(form.role) && form.locationIds.length === 0)
+    ) {
+      setError(
+        isOperationalRole(form.role)
+          ? "Selecciona exactamente una sucursal activa para este integrante."
+          : "Selecciona al menos una sucursal.",
+      );
+      return;
+    }
+
+    const authorizedLocationIds = new Set(locations.map((location) => location.id));
+    if (form.locationIds.some((locationId) => !authorizedLocationIds.has(locationId))) {
+      setError("Actualiza la lista y selecciona solo sucursales activas autorizadas.");
       return;
     }
 
@@ -750,8 +794,7 @@ export default function TeamPage() {
                 selected ? styles.selectedOption : ""
               }`}
               onClick={() => {
-                updateField("role", role.value);
-                setRoleMenuOpen(false);
+                changeRole(role.value);
               }}
             >
               <span>{role.label}</span>
@@ -788,8 +831,16 @@ export default function TeamPage() {
               </div>
 
               <fieldset className={styles.locationSelector}>
-                <legend>Sucursales permitidas *</legend>
-                <p>Selecciona dónde podrá trabajar este integrante.</p>
+                <legend>
+                  {isOperationalRole(form.role)
+                    ? "Sucursal operativa *"
+                    : "Sucursales permitidas *"}
+                </legend>
+                <p>
+                  {isOperationalRole(form.role)
+                    ? "Selecciona la única sucursal donde trabajará este integrante."
+                    : "Selecciona dónde podrá trabajar este integrante."}
+                </p>
                 <div>
                   {locations.map((location) => {
                     const selected = form.locationIds.includes(location.id);
@@ -800,7 +851,8 @@ export default function TeamPage() {
                         className={selected ? styles.selectedLocation : ""}
                       >
                         <input
-                          type="checkbox"
+                          type={isOperationalRole(form.role) ? "radio" : "checkbox"}
+                          name={isOperationalRole(form.role) ? "operational-location" : undefined}
                           checked={selected}
                           onChange={() => toggleLocation(location.id)}
                         />

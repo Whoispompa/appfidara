@@ -27,12 +27,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { type OrganizationBranding, resolveLogoUrl } from "@/lib/branding";
+import {
+  readLocationSession,
+  resolveCachedActiveLocation,
+  SESSION_UPDATED_EVENT,
+  type LocationSession,
+} from "@/lib/active-location-client";
 
 type SessionData = {
   userName: string;
   organizationName: string;
   organizationLogoUrl?: string | null;
   role?: string;
+  activeLocationName?: string;
 };
 
 type AppHeaderProps = {
@@ -89,7 +96,8 @@ export function AppHeader({
           return;
         }
 
-        const saved = JSON.parse(storedSession) as Partial<SessionData>;
+        const saved = readLocationSession() as LocationSession & Partial<SessionData>;
+        const activeLocation = resolveCachedActiveLocation(saved);
 
         setSession({
           userName: saved.userName || "Usuario",
@@ -98,6 +106,7 @@ export function AppHeader({
           organizationLogoUrl:
             saved.organizationLogoUrl || null,
           role: saved.role || "Employee",
+          activeLocationName: activeLocation?.name,
         });
       } catch {
         sessionStorage.removeItem("fidara_session");
@@ -173,6 +182,7 @@ export function AppHeader({
       "storage",
       synchronizeSession,
     );
+    window.addEventListener(SESSION_UPDATED_EVENT, synchronizeSession);
 
     return () => {
       brandingRequest.abort();
@@ -185,6 +195,7 @@ export function AppHeader({
         "storage",
         synchronizeSession,
       );
+      window.removeEventListener(SESSION_UPDATED_EVENT, synchronizeSession);
     };
   }, [router]);
 
@@ -258,7 +269,11 @@ export function AppHeader({
         </Avatar>
 
         <div className="organization-copy">
-          <small>Espacio de trabajo</small>
+          <small className="active-location-context">
+            {session.activeLocationName
+              ? `Sucursal: ${session.activeLocationName}`
+              : "Espacio de trabajo"}
+          </small>
           <strong>{session.organizationName}</strong>
         </div>
       </div>
