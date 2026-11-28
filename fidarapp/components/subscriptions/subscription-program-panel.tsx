@@ -55,6 +55,8 @@ type PlanDraft = {
   benefits: MembershipPlanBenefit[];
 };
 
+type PlanDialogMode = "create" | "manage";
+
 const emptyDraft: PlanDraft = {
   name: "",
   description: "",
@@ -158,6 +160,8 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
   const [evidenceNote, setEvidenceNote] = useState("");
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [planDialogMode, setPlanDialogMode] =
+    useState<PlanDialogMode>("manage");
   const [membershipDialogOpen, setMembershipDialogOpen] = useState(false);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
@@ -241,6 +245,28 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
     }));
   }
 
+  function resetPlanDraft() {
+    setSelectedPlanId("");
+    setDraft({ ...emptyDraft, benefits: [] });
+  }
+
+  function openCreatePlan() {
+    resetPlanDraft();
+    setPlanDialogMode("create");
+    setPlanDialogOpen(true);
+  }
+
+  function openManagePlans() {
+    resetPlanDraft();
+    setPlanDialogMode("manage");
+    setPlanDialogOpen(true);
+  }
+
+  function selectPlan(plan: MembershipPlan) {
+    setSelectedPlanId(plan.id);
+    setDraft(planToDraft(plan));
+  }
+
   async function savePlan() {
     if (!hasSavedProgram) {
       toast.error("Guarda el programa antes de crear planes.");
@@ -296,8 +322,8 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
         throw new Error(payload.message ?? "No fue posible guardar el plan.");
       }
       toast.success(selectedPlan ? "Plan actualizado" : "Plan creado");
-      setDraft(emptyDraft);
-      setSelectedPlanId("");
+      resetPlanDraft();
+      setPlanDialogMode("manage");
       await loadPlans();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No fue posible guardar el plan.");
@@ -543,13 +569,7 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
             type="button"
             variant="outline"
             className="h-12 w-full justify-center border-slate-300 bg-white px-4 font-extrabold text-slate-700 hover:border-slate-400 hover:bg-slate-50 hover:text-[#111827]"
-            onClick={() => {
-              if (selectedPlanId) {
-                setSelectedPlanId("");
-                setDraft(emptyDraft);
-              }
-              setPlanDialogOpen(true);
-            }}
+            onClick={openCreatePlan}
           >
             <Plus className="mr-2 size-4" />
             Crear plan
@@ -558,7 +578,7 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
             type="button"
             variant="outline"
             className="h-12 w-full justify-center border-slate-300 bg-white px-4 font-extrabold text-slate-700 hover:border-slate-400 hover:bg-slate-50 hover:text-[#111827]"
-            onClick={() => setPlanDialogOpen(true)}
+            onClick={openManagePlans}
           >
             <Settings2 className="mr-2 size-4" />
             Administrar planes
@@ -573,13 +593,19 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E11D48]">
-                  Planes de suscripción
+                  {planDialogMode === "create" ? "Nuevo plan" : "Planes de suscripción"}
                 </span>
                 <Dialog.Title className="mt-1 text-2xl font-extrabold text-[#111827]">
-                  Crear y administrar planes
+                  {planDialogMode === "create"
+                    ? "Crear plan"
+                    : selectedPlan
+                      ? `Configurar ${selectedPlan.name}`
+                      : "Administrar planes"}
                 </Dialog.Title>
                 <Dialog.Description className="mt-2 text-sm font-medium leading-6 text-slate-600">
-                  Etapa 1: configura precio y periodicidad. Etapa 2: agrega los beneficios incluidos.
+                  {planDialogMode === "manage" && !selectedPlan
+                    ? "Consulta los planes existentes o inicia la creación de uno nuevo."
+                    : "Configura precio, periodicidad y los beneficios incluidos."}
                 </Dialog.Description>
               </div>
               <Dialog.Close className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-rose-50 hover:text-[#E11D48]" aria-label="Cerrar planes">
@@ -587,22 +613,69 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
               </Dialog.Close>
             </div>
 
-        {selectedPlan && <div className="flex justify-end"><Button variant="ghost" onClick={() => { setSelectedPlanId(""); setDraft(emptyDraft); }}>Nuevo plan</Button></div>}
+        {planDialogMode === "manage" && !selectedPlan && (
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <div>
+                <h3 className="font-extrabold text-slate-950">Planes existentes</h3>
+                <p className="text-sm text-slate-500">Selecciona un plan para consultar y editar su configuración.</p>
+              </div>
+              <Button type="button" onClick={openCreatePlan} className="bg-[#E11D48] font-extrabold hover:bg-[#BE123C]">
+                <Plus className="mr-2 size-4" />Crear nuevo plan
+              </Button>
+            </div>
 
-        {loadingPlans ? <LoaderCircle className="mt-5 animate-spin text-[#E11D48]" /> : plans.length > 0 && (
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
-            {plans.map((plan) => (
-              <button key={plan.id} type="button" onClick={() => { setSelectedPlanId(plan.id); setDraft(planToDraft(plan)); }} className={`min-w-44 rounded-2xl border p-3 text-left ${selectedPlanId === plan.id ? "border-[#E11D48] bg-rose-50" : "border-slate-200 bg-white"}`}>
-                <strong className="block">{plan.name}</strong>
-                <span className="text-sm text-slate-500">${plan.currentVersion.price.toLocaleString("es-MX")} · {periodLabel(plan.currentVersion.billingPeriod)}</span>
-              </button>
-            ))}
+            {loadingPlans ? (
+              <LoaderCircle className="mt-6 animate-spin text-[#E11D48]" />
+            ) : plans.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center">
+                <p className="font-bold text-slate-700">Aún no hay planes configurados.</p>
+                <p className="mt-1 text-sm text-slate-500">Crea el primer plan para comenzar a registrar socios.</p>
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {plans.map((plan) => (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => selectPlan(plan)}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[#E11D48] hover:shadow-[0_10px_25px_rgba(17,24,39,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E11D48]/40"
+                  >
+                    <strong className="block text-slate-950">{plan.name}</strong>
+                    <span className="mt-2 block text-lg font-extrabold text-[#E11D48]">
+                      {plan.currentVersion.price.toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: plan.currentVersion.currency,
+                      })}
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold text-slate-500">
+                      Cada {periodLabel(plan.currentVersion.billingPeriod)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
+        {(planDialogMode === "create" || selectedPlan) && (
+          <>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  resetPlanDraft();
+                  setPlanDialogMode("manage");
+                }}
+              >
+                Volver al listado
+              </Button>
+            </div>
+
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-bold">Nombre<Input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
-          <label className="grid gap-2 text-sm font-bold">Precio mensual<Input type="number" min="0.01" step="0.01" value={draft.price} onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))} /></label>
+          <label className="grid gap-2 text-sm font-bold">Precio<Input type="number" min="0.01" step="0.01" value={draft.price} onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))} /></label>
           <label className="grid gap-2 text-sm font-bold sm:col-span-2">Descripción<Input value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
           <label className="grid gap-2 text-sm font-bold">Periodicidad<select className="h-12 rounded-xl border border-slate-300 bg-white px-3" value={draft.periodUnit} onChange={(event) => setDraft((current) => ({ ...current, periodUnit: Number(event.target.value) as 1 | 2 | 3 | 4 }))}><option value={1}>Días</option><option value={2}>Semanas</option><option value={3}>Meses</option><option value={4}>Años</option></select></label>
           <label className="grid gap-2 text-sm font-bold">Cantidad<Input type="number" min="1" step="1" value={draft.periodCount} onChange={(event) => setDraft((current) => ({ ...current, periodCount: event.target.value }))} /></label>
@@ -622,6 +695,8 @@ export function SubscriptionProgramPanel({ programId }: { programId: string }) {
           ))}
         </div>
         <Button type="button" className="mt-5 h-12 w-full bg-[#E11D48] font-extrabold hover:bg-[#BE123C]" disabled={savingPlan} onClick={() => void savePlan()}>{savingPlan && <LoaderCircle className="mr-2 size-5 animate-spin" />}{selectedPlan ? "Guardar nueva versión" : "Crear plan"}</Button>
+          </>
+        )}
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>

@@ -701,7 +701,6 @@ export default function CustomerDetailPage() {
       {subscriptionsEnabled && (
         <CustomerMemberships
           customerId={customer.id}
-          customerName={customer.fullName}
           cards={customer.cards.map((card) => ({
             id: card.id,
             qrToken: card.qrToken,

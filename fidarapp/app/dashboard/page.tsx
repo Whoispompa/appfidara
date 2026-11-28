@@ -51,7 +51,7 @@ import {
 
 import type { LucideIcon } from "lucide-react";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 
 
@@ -163,6 +163,38 @@ type PeriodMetrics = {
 
   rewardsRedeemed: number;
 
+  comparison?: PeriodComparison;
+
+};
+
+
+
+type ComparisonStatus = "increase" | "decrease" | "unchanged" | "new";
+
+
+
+type IndicatorComparison = {
+
+  previous: number;
+
+  variation: number;
+
+  status: ComparisonStatus;
+
+};
+
+
+
+type PeriodComparison = {
+
+  operations: IndicatorComparison;
+
+  customersServed: IndicatorComparison;
+
+  salesAmount: IndicatorComparison;
+
+  rewardsRedeemed: IndicatorComparison;
+
 };
 
 
@@ -241,81 +273,125 @@ type ChartMetric = "netSales" | "operations" | "customers";
 
 
 
-type GrowthResult = number | "new" | null;
-
-
-
-function calculateGrowth(current: number, previous?: number): GrowthResult {
-
-  if (!Number.isFinite(current) || previous === undefined || !Number.isFinite(previous)) {
-
-    return null;
-
-  }
-
-  if (previous === 0) {
-
-    return current > 0 ? "new" : 0;
-
-  }
-
-  const percentage = ((current - previous) / previous) * 100;
-
-  return Number.isFinite(percentage) ? percentage : null;
-
-}
-
-
-
 function GrowthBadge({
 
-  current,
-
-  previous,
+  comparison,
 
   comparisonLabel,
 
+  period,
+
+  previousValue,
+
 }: {
 
-  current: number;
-
-  previous?: number;
+  comparison?: IndicatorComparison;
 
   comparisonLabel: string;
 
+  period: Period;
+
+  previousValue?: string;
+
 }) {
 
-  const growth = calculateGrowth(current, previous);
+  const tooltipId = useId();
 
-  const formatted =
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
-    typeof growth === "number"
+  const tooltipRootRef = useRef<HTMLDivElement>(null);
 
-      ? `${new Intl.NumberFormat("es-MX", {
+  useEffect(() => {
 
-          maximumFractionDigits: 1,
+    if (!tooltipOpen) {
 
-        }).format(Math.abs(growth))}%`
+      return;
 
-      : growth === "new"
+    }
 
-        ? "Nuevo"
+    const closeOnOutsidePointer = (event: PointerEvent) => {
 
-        : "Sin referencia";
+      if (
+
+        event.target instanceof Node &&
+
+        !tooltipRootRef.current?.contains(event.target)
+
+      ) {
+
+        setTooltipOpen(false);
+
+      }
+
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+
+      if (event.key === "Escape") {
+
+        setTooltipOpen(false);
+
+      }
+
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+
+      document.removeEventListener("keydown", closeOnEscape);
+
+    };
+
+  }, [tooltipOpen]);
+
+  const formattedVariation = comparison && Number.isFinite(comparison.variation)
+
+    ? new Intl.NumberFormat("es-MX", {
+
+        maximumFractionDigits: 1,
+
+      }).format(Math.abs(comparison.variation))
+
+    : null;
+
+  const formatted = !comparison
+
+    ? "Sin referencia"
+
+    : comparison.status === "new"
+
+      ? "Nuevo"
+
+      : comparison.status === "unchanged"
+
+        ? "0%"
+
+        : formattedVariation === null
+
+          ? "Sin referencia"
+
+          : comparison.status === "increase"
+
+            ? `+${formattedVariation}%`
+
+            : `-${formattedVariation}%`;
 
   const accessibleText = `${formatted} respecto a ${comparisonLabel}`;
 
-  if (growth === null || growth === 0) {
+  if (!comparison) {
 
     return (
 
       <span
 
-        className="inline-flex min-h-7 items-center gap-1 rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[10px] font-extrabold text-[#6B7280]"
+        className="inline-flex min-h-7 items-center rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[10px] font-extrabold text-[#6B7280]"
 
         aria-label={accessibleText}
-
-        title={accessibleText}
 
       >
 
@@ -327,35 +403,143 @@ function GrowthBadge({
 
   }
 
-  const positive = growth === "new" || growth > 0;
+  const comparisonMessage = comparison
+
+    ? {
+
+        increase:
+
+          "Este indicador aumentó respecto al período anterior equivalente.",
+
+        decrease:
+
+          "Este indicador disminuyó respecto al período anterior equivalente.",
+
+        unchanged:
+
+          "Este indicador se mantuvo igual respecto al período anterior equivalente.",
+
+        new:
+
+          "En el período anterior equivalente no se registró actividad para este indicador.",
+
+      }[comparison.status]
+
+    : null;
+
+  const increasing = comparison.status === "increase";
+
+  const newIndicator = comparison.status === "new";
+
+  const decreasing = comparison.status === "decrease";
+
+  const positive = increasing || newIndicator;
 
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
 
+  const badgeClassName =
+
+    positive
+
+      ? "bg-[#071A10] text-[#00E676]"
+
+      : decreasing
+
+        ? "bg-[#2A1015] text-[#FF5367]"
+
+        : "bg-[#F3F4F6] text-[#6B7280]";
+
   return (
 
-    <span
+    <div
 
-      className={`inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+      ref={tooltipRootRef}
 
-        positive
+      className="relative"
 
-          ? "bg-emerald-50 text-emerald-700"
+      onMouseEnter={() => comparison && setTooltipOpen(true)}
 
-          : "bg-rose-50 text-rose-700"
-
-      }`}
-
-      aria-label={accessibleText}
-
-      title={accessibleText}
+      onMouseLeave={() => setTooltipOpen(false)}
 
     >
 
-      <Icon size={13} aria-hidden="true" />
+      <button
 
-      {formatted}
+        type="button"
 
-    </span>
+        className={`relative inline-flex min-h-7 touch-manipulation items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold outline-none transition after:absolute after:-inset-2 after:rounded-full after:content-[''] focus-visible:ring-2 focus-visible:ring-[#E11D48]/50 focus-visible:ring-offset-2 ${badgeClassName}`}
+
+        aria-label={`${accessibleText}. Mostrar detalles de la comparación.`}
+
+        aria-describedby={tooltipOpen && comparison ? tooltipId : undefined}
+
+        aria-expanded={comparison ? tooltipOpen : undefined}
+
+        onFocus={() => comparison && setTooltipOpen(true)}
+
+        onBlur={() => setTooltipOpen(false)}
+
+        onClick={() => comparison && setTooltipOpen(true)}
+
+      >
+
+        {(increasing || newIndicator || decreasing) && (
+
+          <Icon size={13} aria-hidden="true" />
+
+        )}
+
+        {formatted}
+
+      </button>
+
+      {tooltipOpen && comparison && previousValue !== undefined && (
+
+        <div
+
+          id={tooltipId}
+
+          role="tooltip"
+
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(18rem,calc(100vw-3rem))] rounded-xl border border-[#E5E7EB] bg-white p-3 text-left text-[11px] font-medium leading-relaxed text-[#4B5563] shadow-[0_14px_35px_rgba(15,23,42,0.16)]"
+
+        >
+
+          <p className="font-bold text-[#111827]">
+
+            {period === "today"
+
+              ? "Compara con ayer hasta la misma hora local."
+
+              : "Compara con el intervalo equivalente del mes anterior."}
+
+          </p>
+
+          <p className="mt-1.5">
+
+            Valor anterior: <strong className="text-[#111827]">{previousValue}</strong>
+
+          </p>
+
+          <p className="mt-1.5">
+
+            Resultado: <strong className="text-[#111827]">{formatted}</strong>
+
+          </p>
+
+          <p className="mt-1.5">{comparisonMessage}</p>
+
+          <p className="mt-1.5 text-[#6B7280]">
+
+            Se comparan períodos equivalentes, no necesariamente el día completo.
+
+          </p>
+
+        </div>
+
+      )}
+
+    </div>
 
   );
 
@@ -771,7 +955,13 @@ export default function DashboardPage() {
 
       label: "Operaciones",
 
-      current: metrics.operations,
+      comparison: metrics.comparison?.operations,
+
+      previousValue: metrics.comparison
+
+        ? formatNumber(metrics.comparison.operations.previous)
+
+        : undefined,
 
       value: formatNumber(metrics.operations),
 
@@ -787,7 +977,13 @@ export default function DashboardPage() {
 
       label: "Clientes atendidos",
 
-      current: metrics.customers,
+      comparison: metrics.comparison?.customersServed,
+
+      previousValue: metrics.comparison
+
+        ? formatNumber(metrics.comparison.customersServed.previous)
+
+        : undefined,
 
       value: formatNumber(metrics.customers),
 
@@ -803,7 +999,13 @@ export default function DashboardPage() {
 
       label: "Ventas registradas",
 
-      current: metrics.netSales ?? metrics.grossSales,
+      comparison: metrics.comparison?.salesAmount,
+
+      previousValue: metrics.comparison
+
+        ? formatCurrency(metrics.comparison.salesAmount.previous)
+
+        : undefined,
 
       value: formatCurrency(metrics.netSales ?? metrics.grossSales),
 
@@ -819,7 +1021,13 @@ export default function DashboardPage() {
 
       label: "Recompensas canjeadas",
 
-      current: metrics.rewardsRedeemed,
+      comparison: metrics.comparison?.rewardsRedeemed,
+
+      previousValue: metrics.comparison
+
+        ? formatNumber(metrics.comparison.rewardsRedeemed.previous)
+
+        : undefined,
 
       value: formatNumber(metrics.rewardsRedeemed),
 
@@ -845,9 +1053,9 @@ export default function DashboardPage() {
 
     period === "today"
 
-      ? "ayer en el mismo intervalo horario"
+      ? "ayer"
 
-      : "el intervalo equivalente del mes anterior";
+      : "mes anterior";
 
 
 
@@ -931,14 +1139,6 @@ export default function DashboardPage() {
 
           <div>
 
-            <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#E11D48]">
-
-              Resumen del negocio
-
-            </span>
-
-
-
             <h1 className="mt-3 text-[34px] font-extrabold tracking-[-0.045em] text-black sm:text-5xl">
 
               Tu negocio, en movimiento.
@@ -946,43 +1146,8 @@ export default function DashboardPage() {
             </h1>
 
 
-
-            <p className="mt-2 text-sm text-[#6B7280]">
-
-              Actividad de{" "}
-
-              <strong className="text-black">
-
-                {summary.organizationName ?? "tu negocio"}
-
-              </strong>
-
-              .
-
-            </p>
-
           </div>
 
-
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-
-
-            <Link
-
-              href="/dashboard/escanear"
-
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#E11D48] px-5 text-sm font-extrabold text-white shadow-lg shadow-[#E11D48]/20 transition hover:-translate-y-0.5 hover:bg-[#BE123C]"
-
-            >
-
-              <QrCode size={20} />
-
-              Escanear tarjeta
-
-            </Link>
-
-          </div>
 
         </section>
 
@@ -1058,7 +1223,7 @@ export default function DashboardPage() {
 
                 key={metric.label}
 
-                className="rounded-[20px] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(0,0,0,0.06)]"
+                className="relative rounded-[20px] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(0,0,0,0.035)] transition hover:z-20 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(0,0,0,0.06)] focus-within:z-20"
 
               >
 
@@ -1076,13 +1241,27 @@ export default function DashboardPage() {
 
 
 
-                  <GrowthBadge
+                  <div className="flex flex-col items-end gap-1">
 
-                    current={metric.current}
+                    <GrowthBadge
 
-                    comparisonLabel={comparisonLabel}
+                      comparison={metric.comparison}
 
-                  />
+                      comparisonLabel={comparisonLabel}
+
+                      period={period}
+
+                      previousValue={metric.previousValue}
+
+                    />
+
+                    <span className="text-[10px] font-semibold text-[#9CA3AF]">
+
+                      vs. {comparisonLabel}
+
+                    </span>
+
+                  </div>
 
                 </div>
 
